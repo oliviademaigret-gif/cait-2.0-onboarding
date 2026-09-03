@@ -8,7 +8,19 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&display=swap" rel="stylesheet">
 <script src="https://cdn.tailwindcss.com"></script>
-<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+<script src="https://unpkg.com/lucide@0.544.0/dist/umd/lucide.min.js"></script>
+<script>
+/* Icons come from a PINNED lucide so an upstream release can't change them mid-study.
+   If that exact version ever fails to resolve, fall back to latest and re-draw — losing
+   every icon in the prototype during a session is a worse outcome than an unpinned one. */
+(function(){
+  if(window.lucide) return;
+  var s=document.createElement('script');
+  s.src='https://unpkg.com/lucide@latest/dist/umd/lucide.min.js';
+  s.onload=function(){ try{ window.lucide && window.lucide.createIcons(); }catch(e){} };
+  document.head.appendChild(s);
+})();
+</script>
 <script>
   tailwind.config = { theme: { extend: {
     fontFamily: { sans:['"DM Sans"','system-ui','sans-serif'] },
@@ -2415,7 +2427,7 @@
     </div>
     <div class="px-3 py-3" style="border-top:1px solid #F0F2F5">
       <button class="nav-item" id="navAccounts"><i data-lucide="landmark" class="w-[18px] h-[18px]"></i> Connected accounts <span class="nav-badge inline-flex items-center gap-1.5">6 <span class="w-1.5 h-1.5 rounded-full" style="background:#F59F1D"></span></span></button>
-      <div class="nav-item"><span class="w-7 h-7 rounded-full flex items-center justify-center text-[12px] font-bold" style="background:#E6FAEE;color:#027A42">J</span> <span class="text-[14px]">Jennifer Chen</span></div>
+      <div class="nav-item"><span class="w-7 h-7 rounded-full flex items-center justify-center" style="background:#E6FAEE;color:#027A42"><i data-lucide="user" class="w-[14px] h-[14px]"></i></span> <span class="text-[14px]">My account</span></div>
     </div>
   </aside>
 
@@ -2459,8 +2471,8 @@
           </div>
           <div class="ih-card ih-move2" style="--r:2.5deg">
             <span class="ih-badge">Today's highest-leverage move</span>
-            <div class="ih-cardh">Bump your 401(k) to 8% — catch Acme's full match</div>
-            <div class="ih-cardv"><b>+$1,840</b><small>/yr free money</small></div>
+            <div class="ih-cardh">Bump your 401(k) to 5% — catch Acme's full match</div>
+            <div class="ih-cardv"><b>+$1,880</b><small>/yr free money</small></div>
           </div>
           <!-- Restored from d193d1e, reverted in 848205f when the row was three cards
                wide — the 2x2 cluster has room for it again. (Was "layout 2 only"
@@ -2474,10 +2486,13 @@
           </div>
           <div class="ih-card ih-goals2" style="--r:2deg">
             <div class="ih-k">Your goals</div>
-            <div class="ih-goalrow"><span>Buy a home</span><b>43%</b></div>
-            <div class="ih-track"><span class="ih-bar" style="width:43%"></span></div>
-            <div class="ih-goalrow"><span>Retirement</span><b>62%</b></div>
+            <!-- Named goals here ("Buy a home", "Retirement") primed testers moments before
+                 the flow asks for their own priorities — the same contamination the research
+                 briefing card was rewritten to avoid. Shows the mechanic, names nothing. -->
+            <div class="ih-goalrow"><span>Your top priority</span><b>62%</b></div>
             <div class="ih-track"><span class="ih-bar" style="width:62%"></span></div>
+            <div class="ih-goalrow"><span>Your next one</span><b>43%</b></div>
+            <div class="ih-track"><span class="ih-bar" style="width:43%"></span></div>
           </div>
           </div>
         </div>
@@ -2542,7 +2557,7 @@
         <!-- Classic landing (only variant in 10c — voice-first + toggle removed) -->
         <div id="variantTiles" class="flex-1 flex flex-col justify-center">
           <div class="ob-step rv" style="--rvd:0ms"></div>
-          <h1 class="ob-h1 text-center rv" style="--rvd:70ms">Hi <span class="grad-ink">Jennifer</span>!</h1>
+          <h1 class="ob-h1 text-center rv" style="--rvd:70ms">Hi <span class="grad-ink">there</span>!</h1>
           <p class="ob-sub text-center rv" style="--rvd:150ms">Talk or tap to set your priorities.</p>
           <div class="mtiles mt-6 rv" style="--rvd:240ms">
             <div class="mtile" id="voiceMode">
@@ -2813,7 +2828,7 @@
     <div class="flex-1 min-h-0 flex flex-col px-6 pb-6">
       <!-- greeting centered in the space above the docked composer · progressively reveals -->
       <div class="text-center flex-1 flex flex-col justify-center">
-        <p class="text-[16px] text-subink rv" style="--rvd:100ms">Hi Jennifer</p>
+        <p class="text-[16px] text-subink rv" style="--rvd:100ms">Hi there</p>
         <h1 class="text-[30px] font-bold leading-[1.1] mt-1 rv" style="--rvd:190ms">Ask <span class="grad-cait">Cait</span></h1>
         <p id="acSub" class="text-[14px] text-muted mt-2.5 leading-snug max-w-[300px] mx-auto rv" style="--rvd:280ms">Your AI assistant for your whole financial picture.</p>
       </div>
@@ -3686,7 +3701,13 @@
   var QUESTIONS=[
     {q:'How much of your paycheck goes to your 401(k) today?', opts:['Nothing yet','1–3%','4–6%','7%+','Not sure'], match:/retire|401|benefit|match/},
     {q:'Anything saved toward a home down payment yet?',        opts:['Not yet','<$5k','$5–15k','$15k+'], match:/home|house|down|place/},
-    {q:'If a $1,000 surprise hit this month, how would you cover it?', opts:['Savings','Credit card','Manage','Not sure'], match:/save|saving|safety|cushion|emergenc|cash|budget|control|track/}
+    /* Debt had no question, so a tester whose top worry was student loans was never asked
+       about them — while the plan still asserted "$100/mo · clears about 7 months sooner".
+       Question text carried over from the earlier ESTIMATES array in this file. */
+    {q:'Roughly what do you owe on cards and loans?',           opts:['Under $5k','$5–15k','$15–25k','$25k+'], match:/debt|loan|card|owe|student|credit|balance/},
+    /* "clarity" matched nothing, and the empty-match fallback then asked every question —
+       so the person who said they just wanted clarity got the longest questionnaire. */
+    {q:'If a $1,000 surprise hit this month, how would you cover it?', opts:['Savings','Credit card','Manage','Not sure'], match:/save|saving|safety|cushion|emergenc|cash|budget|control|clarity|clear|organi|overwhelm|picture/}
   ];
   var estActiveCount=QUESTIONS.length;
   var qAnswers={};
@@ -3752,7 +3773,7 @@
   });
   // live "Saved to your Memory" — the tile appears on the estimates screen and grows as the user answers
   var MEM_CHK='<i data-lucide="check" class="w-3.5 h-3.5" style="color:#16B76C"></i> ';
-  var MEM_LABELS=['401(k)','Down payment','Safety net'];
+  var MEM_LABELS=['401(k)','Down payment','Debt','Safety net'];
   function estTag(qi, delay){ return '<span class="memtag pop" data-est="'+qi+'"'+(delay?' style="animation-delay:'+delay+'s"':'')+'>'+MEM_CHK+MEM_LABELS[qi]+': '+qAnswers[qi]+'</span>'; }
   function updateQMemory(qi){
     var wrap=$('#qMemory'); if(!wrap) return;
@@ -4953,7 +4974,7 @@
     await sleep(700);
 
     // 6 · the plan — dense goal rows, each already paired with an Acme benefit
-    await caitSay("Here's your plan, Jennifer — "+(finalGoals.length===1?'one priority':finalGoals.length+' priorities')+", and your Acme benefits are already pulling for each one.");
+    await caitSay("Here's your plan — "+(finalGoals.length===1?'one priority':finalGoals.length+' priorities')+", and your Acme benefits are already pulling for each one.");
     await sleep(250);
     caitBlock(planHTML(finalGoals));
     await sleep(650);

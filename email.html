@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Inbox</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{
+    font-family:'DM Sans',Roboto,sans-serif;
+    background:#F5F5F5;
+    color:#262626;
+    -webkit-font-smoothing:antialiased;
+    display:flex;align-items:center;justify-content:center;
+    padding:24px;
+  }
+
+  /* ── browser window shell ─────────────────────────────── */
+  .browser{
+    width:100%;max-width:1240px;height:calc(100vh - 48px);min-height:620px;
+    background:#FFFFFF;border-radius:12px;overflow:hidden;
+    display:flex;flex-direction:column;
+    box-shadow:0 24px 60px -20px rgba(0,0,0,.28);
+  }
+  .chrome{
+    display:flex;align-items:center;gap:12px;
+    padding:10px 14px;background:#F5F5F5;border-bottom:1px solid #F5F5F5;flex:none;
+  }
+  .dots{display:flex;gap:6px;flex:none}
+  .dots i{width:11px;height:11px;border-radius:9999px;background:#A3A3A3;display:block}
+  .addr{
+    flex:1;background:#FFFFFF;border-radius:9999px;
+    padding:6px 14px;font-size:12.5px;color:#A3A3A3;text-align:center;
+  }
+
+  /* ── mail app ─────────────────────────────────────────── */
+  .mail{flex:1;min-height:0;display:grid;grid-template-columns:196px 316px 1fr}
+
+  .rail{border-right:1px solid #F5F5F5;padding:18px 12px;background:#FBFCFD}
+  .rail .brandline{font-size:14.5px;font-weight:700;color:#262626;padding:0 10px 16px}
+  .rail a{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:8px 10px;margin-bottom:2px;border-radius:8px;
+    font-size:13.5px;color:#262626;text-decoration:none;
+  }
+  .rail a.on{background:#E5EDFF;font-weight:600}
+  .rail a span{font-size:12px;color:#A3A3A3}
+
+  .list{border-right:1px solid #F5F5F5;overflow-y:auto}
+  .row{padding:14px 16px;border-bottom:1px solid #F5F5F5;cursor:default}
+  .row.sel{background:#F2F6FF}
+  .row .from{font-size:13.5px;font-weight:600;margin-bottom:3px;display:flex;justify-content:space-between;gap:8px}
+  .row .from em{font-style:normal;font-size:11.5px;font-weight:400;color:#A3A3A3;flex:none}
+  .row .subj{font-size:13px;margin-bottom:2px}
+  .row .prev{font-size:12.5px;color:#A3A3A3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .row.read .from,.row.read .subj{font-weight:400;color:#A3A3A3}
+
+  .pane{overflow-y:auto;padding:28px 32px 48px}
+  .pane .subject{font-size:21px;font-weight:700;color:#000000;line-height:1.3;margin:0 0 14px}
+  .senderline{display:flex;align-items:center;gap:10px;margin-bottom:26px}
+  .senderline .av{
+    width:36px;height:36px;border-radius:9999px;background:#F2F6FF;
+    display:flex;align-items:center;justify-content:center;flex:none;
+  }
+  .senderline .who{font-size:13.5px;font-weight:600;line-height:1.35}
+  .senderline .who span{display:block;font-weight:400;font-size:12.5px;color:#A3A3A3}
+
+  /* ── the email body ───────────────────────────────────── */
+  .letter{
+    border:1px solid #F5F5F5;border-radius:16px;overflow:hidden;background:#FFFFFF;
+    max-width:660px;
+  }
+  .letter .top{padding:26px 34px 0}
+  .letter .body{padding:22px 34px 34px}
+  .letter h1{
+    font-size:29px;line-height:1.2;font-weight:700;color:#000000;margin:0 0 14px;
+  }
+  .letter h1 .hl{color:#265DDC}
+  .letter p{font-size:15.5px;line-height:1.45;color:#262626;margin:0 0 14px}
+  .letter .cta{margin:24px 0 8px}
+  .letter .cta a{
+    display:inline-block;background:#265DDC;color:#FFFFFF;
+    font-weight:700;font-size:15.5px;text-decoration:none;
+    padding:14px 32px;border-radius:9999px;
+  }
+  .letter .fine{font-size:12.5px;color:#A3A3A3;line-height:1.45;margin:0}
+  .letter .foot{
+    border-top:1px solid #F5F5F5;padding:18px 34px;background:#FBFCFD;
+    font-size:11.5px;color:#A3A3A3;line-height:1.5;
+  }
+  @media(max-width:1080px){
+    .mail{grid-template-columns:1fr}
+    .rail,.list{display:none}
+  }
+</style>
+</head>
+<body>
+<div class="browser">
+
+  <div class="chrome">
+    <div class="dots"><i></i><i></i><i></i></div>
+    <div class="addr">mail.acmecorp.com/inbox</div>
+  </div>
+
+  <div class="mail">
+
+    <nav class="rail">
+      <div class="brandline">Acme Mail</div>
+      <a href="#" class="on">Inbox <span>3</span></a>
+      <a href="#">Starred</a>
+      <a href="#">Sent</a>
+      <a href="#">Drafts</a>
+      <a href="#">Archive</a>
+    </nav>
+
+    <div class="list">
+      <div class="row sel">
+        <div class="from">Candidly <em>7:41am</em></div>
+        <div class="subj">Your new financial benefit is ready</div>
+        <div class="prev">Acme has added a new benefit to help you plan…</div>
+      </div>
+      <div class="row">
+        <div class="from">Payroll <em>7:02am</em></div>
+        <div class="subj">Your September pay statement is available</div>
+        <div class="prev">View your statement in the payroll portal.</div>
+      </div>
+      <div class="row">
+        <div class="from">IT Helpdesk <em>Yesterday</em></div>
+        <div class="subj">Scheduled maintenance this weekend</div>
+        <div class="prev">Some systems will be briefly unavailable on…</div>
+      </div>
+      <div class="row read">
+        <div class="from">Team Calendar <em>Yesterday</em></div>
+        <div class="subj">Invitation: Monthly all-hands</div>
+        <div class="prev">You have been invited to an event.</div>
+      </div>
+      <div class="row read">
+        <div class="from">Facilities <em>Monday</em></div>
+        <div class="subj">Parking garage closure</div>
+        <div class="prev">The east garage will be closed Tuesday.</div>
+      </div>
+    </div>
+
+    <div class="pane">
+      <h2 class="subject">Your new financial benefit is ready</h2>
+
+      <div class="senderline">
+        <div class="av">
+          <svg width="18" viewBox="0 0 79.2 79.1" aria-label="Candidly logo" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <style>
+                .em0{fill:#265ddc}
+                .em1{fill:url(#candidly-av-2)}
+                .em2{fill:url(#candidly-av-1)}
+                .em3{fill:url(#candidly-av-0)}
+              </style>
+              <linearGradient id="candidly-av-0" x1="0" y1="1007.9" x2="19.9" y2="1007.9" gradientTransform="translate(0 -998)" gradientUnits="userSpaceOnUse">
+                <stop offset="0" stop-color="#cb99d5"/><stop offset="1" stop-color="#e9b39d"/>
+              </linearGradient>
+              <linearGradient id="candidly-av-1" x1="59.4" y1="1067.2" x2="79.1" y2="1067.2" gradientTransform="translate(0 -998)" gradientUnits="userSpaceOnUse">
+                <stop offset="0" stop-color="#cb99d5"/><stop offset="1" stop-color="#e9b39d"/>
+              </linearGradient>
+              <linearGradient id="candidly-av-2" x1="59.4" y1="1037.5" x2="79.1" y2="1037.5" gradientTransform="translate(0 -998)" gradientUnits="userSpaceOnUse">
+                <stop offset="0" stop-color="#cb99d5"/><stop offset="1" stop-color="#e9b39d"/>
+              </linearGradient>
+            </defs>
+            <path class="em0" d="M79.2,9.8v.3c0,5.4-4.4,9.8-9.8,9.8h-29.9c-5.4,0-9.8-4.4-9.8-9.8v-.3C29.7,4.4,34.1,0,39.5,0h29.9C74.8,0,79.2,4.4,79.2,9.8Z"/>
+            <path class="em0" d="M39.5,49.4c5.5,0,9.9-4.4,9.9-9.9h0c0-5.5-4.4-9.9-9.9-9.9H9.9c-5.5,0-9.9,4.5-9.9,9.9h0v29.6h0v1c.4,5.1,4.6,9.1,9.8,9.1h.3c.7,0,29.4-.2,29.4-.2,5.5,0,9.9-4.4,9.9-9.9h0c0-5.5-4.4-9.9-9.9-9.9h-19.7v-9.7h19.7Z"/>
+            <circle class="em3" cx="10" cy="9.9" r="9.9"/>
+            <circle class="em2" cx="69.2" cy="69.2" r="9.9"/>
+            <circle class="em1" cx="69.2" cy="39.5" r="9.9"/>
+          </svg>
+        </div>
+        <div class="who">Candidly <span>to me &#8226; 7:41am</span></div>
+      </div>
+
+      <div class="letter">
+        <div class="top">
+          <svg width="132" viewBox="0 0 425.5 79.1" aria-label="Candidly logo" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <style>
+                .lm0{fill:#265ddc}
+                .lm1{fill:url(#candidly-lg-2)}
+                .lm2{fill:url(#candidly-lg-1)}
+                .lm3{fill:url(#candidly-lg-0)}
+              </style>
+              <linearGradient id="candidly-lg-0" x1="0" y1="1007.9" x2="19.9" y2="1007.9" gradientTransform="translate(0 -998)" gradientUnits="userSpaceOnUse">
+                <stop offset="0" stop-color="#cb99d5"/><stop offset="1" stop-color="#e9b39d"/>
+              </linearGradient>
+              <linearGradient id="candidly-lg-1" x1="59.4" y1="1067.2" x2="79.1" y2="1067.2" gradientTransform="translate(0 -998)" gradientUnits="userSpaceOnUse">
+                <stop offset="0" stop-color="#cb99d5"/><stop offset="1" stop-color="#e9b39d"/>
+              </linearGradient>
+              <linearGradient id="candidly-lg-2" x1="59.4" y1="1037.5" x2="79.1" y2="1037.5" gradientTransform="translate(0 -998)" gradientUnits="userSpaceOnUse">
+                <stop offset="0" stop-color="#cb99d5"/><stop offset="1" stop-color="#e9b39d"/>
+              </linearGradient>
+            </defs>
+            <g>
+              <path d="M127.6,59.3c-3.9,0-7.3-.8-10.3-2.5s-5.3-4-7-7.1c-1.7-3-2.6-6.5-2.6-10.3s.9-7.3,2.6-10.4c1.7-3,4.1-5.4,7-7.1,3-1.7,6.4-2.5,10.3-2.5s9,1.3,12.3,3.8c3.3,2.5,5.4,6,6.4,10.5h-10.4c-.5-1.8-1.5-3.3-3-4.3s-3.3-1.6-5.3-1.6-5,1-6.9,3.1c-1.9,2-2.8,4.9-2.8,8.5s.9,6.5,2.8,8.5,4.2,3.1,6.9,3.1,3.8-.5,5.3-1.5,2.5-2.5,3-4.4h10.4c-.9,4.3-3,7.8-6.4,10.4-3.3,2.6-7.4,3.9-12.3,3.9h0Z"/>
+              <path d="M168.1,59.3c-3.3,0-6-.5-8.1-1.6-2.1-1-3.7-2.4-4.7-4.2-1-1.7-1.5-3.7-1.5-5.8,0-3.5,1.4-6.4,4.1-8.6s6.9-3.3,12.4-3.3h9.7v-.9c0-2.6-.7-4.5-2.2-5.8s-3.3-1.8-5.5-1.8-3.7.5-5.2,1.4c-1.5,1-2.4,2.3-2.8,4.2h-9.6c.2-2.8,1.2-5.2,2.8-7.2s3.7-3.6,6.2-4.7,5.4-1.6,8.6-1.6c5.4,0,9.7,1.4,12.8,4.1s4.7,6.5,4.7,11.5v23.4h-8.4l-.9-6.1c-1.1,2-2.7,3.7-4.7,5.1-2,1.3-4.6,2-7.8,2h0ZM170.3,51.6c2.8,0,5-.9,6.6-2.8s2.5-4.1,2.9-6.8h-8.4c-2.6,0-4.5.5-5.6,1.4-1.1,1-1.7,2.1-1.7,3.5s.6,2.6,1.7,3.5,2.6,1.2,4.5,1.2Z"/>
+              <path d="M199.2,58.4V20.3h8.7l.8,6.4c1.2-2.2,2.9-4,5.1-5.4,2.2-1.3,4.8-2,7.9-2,4.7,0,8.4,1.5,11,4.4s3.9,7.3,3.9,13v21.5h-9.8v-20.5c0-3.3-.7-5.8-2-7.5s-3.4-2.6-6.2-2.6-5,1-6.8,2.9c-1.8,1.9-2.6,4.7-2.6,8.1v19.6h-9.8l-.2.2Z"/>
+              <path d="M263.4,59.3c-3.6,0-6.8-.9-9.6-2.6-2.8-1.7-5-4.1-6.7-7.1-1.6-3-2.4-6.4-2.4-10.3s.8-7.2,2.4-10.2c1.6-3,3.9-5.3,6.7-7.1,2.8-1.7,6-2.6,9.6-2.6s5.4.5,7.5,1.6,3.9,2.6,5.2,4.5V3.2h9.8v55.2h-8.7l-1.1-5.4c-1.2,1.7-2.9,3.2-4.9,4.5s-4.6,1.9-7.9,1.9h.1ZM265.4,50.7c3.2,0,5.8-1.1,7.8-3.2s3-4.8,3-8.2-1-6-3-8.2c-2-2.1-4.6-3.2-7.8-3.2s-5.7,1-7.8,3.1c-2,2.1-3.1,4.8-3.1,8.1s1,6.1,3.1,8.2c2.1,2.1,4.6,3.2,7.8,3.2v.2Z"/>
+              <path d="M301.2,14.4c-1.8,0-3.3-.5-4.4-1.6s-1.7-2.4-1.7-4.1.6-3,1.7-4,2.6-1.6,4.4-1.6,3.3.5,4.4,1.6c1.1,1,1.7,2.4,1.7,4s-.6,3-1.7,4.1-2.6,1.6-4.4,1.6ZM296.2,58.4V20.3h9.8v38h-9.8Z"/>
+              <path d="M333.8,59.3c-3.6,0-6.8-.9-9.6-2.6s-5-4.1-6.7-7.1c-1.6-3-2.5-6.4-2.5-10.3s.8-7.2,2.5-10.2c1.6-3,3.9-5.3,6.7-7.1,2.8-1.7,6-2.6,9.6-2.6s5.4.5,7.5,1.6,3.9,2.6,5.2,4.5V3.2h9.8v55.2h-8.7l-1.1-5.4c-1.2,1.7-2.9,3.2-4.9,4.5s-4.6,1.9-7.9,1.9h.1ZM335.9,50.7c3.2,0,5.8-1.1,7.8-3.2s3-4.8,3-8.2-1-6-3-8.2c-2-2.1-4.6-3.2-7.8-3.2s-5.7,1-7.8,3.1c-2,2.1-3.1,4.8-3.1,8.1s1,6.1,3.1,8.2,4.6,3.2,7.8,3.2v.2Z"/>
+              <path d="M366.3,58.4V3.2h9.8v55.2h-9.8Z"/>
+              <path d="M391,75.2l8.8-19.4h-2.3l-14.8-35.5h10.7l10.7,26.8,11.1-26.8h10.4l-24.2,54.9h-10.4Z"/>
+            </g>
+            <g>
+              <path class="lm0" d="M79.2,9.8v.3c0,5.4-4.4,9.8-9.8,9.8h-29.9c-5.4,0-9.8-4.4-9.8-9.8v-.3C29.7,4.4,34.1,0,39.5,0h29.9C74.8,0,79.2,4.4,79.2,9.8Z"/>
+              <path class="lm0" d="M39.5,49.4c5.5,0,9.9-4.4,9.9-9.9h0c0-5.5-4.4-9.9-9.9-9.9H9.9c-5.5,0-9.9,4.5-9.9,9.9h0v29.6h0v1c.4,5.1,4.6,9.1,9.8,9.1h.3c.7,0,29.4-.2,29.4-.2,5.5,0,9.9-4.4,9.9-9.9h0c0-5.5-4.4-9.9-9.9-9.9h-19.7v-9.7h19.7Z"/>
+              <circle class="lm3" cx="10" cy="9.9" r="9.9"/>
+              <circle class="lm2" cx="69.2" cy="69.2" r="9.9"/>
+              <circle class="lm1" cx="69.2" cy="39.5" r="9.9"/>
+            </g>
+          </svg>
+        </div>
+
+        <div class="body">
+          <h1>Acme added a new <span class="hl">financial benefit</span>.</h1>
+          <p>It is included with your benefits at no cost to you, and it is available now.</p>
+          <p>Meet Cait, an assistant that looks at your whole financial picture and helps you build a plan &#8212; what to pay down, what to save for, and what your Acme benefits already cover.</p>
+          <p>Setting it up takes a few minutes. You can start with whatever is on your mind.</p>
+          <div class="cta"><a href="onboarding-v10c-desktop.html">Get started &#8594;</a></div>
+          <p class="fine">Private and encrypted. Your information is never shared with your employer.</p>
+        </div>
+
+        <div class="foot">
+          You are receiving this because your employer offers Candidly as a benefit.<br>
+          Copyright 2026 Candidly
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+</body>
+</html>

@@ -1,0 +1,990 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Candidly · Cait — Workspace (desktop)</title>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/lucide@0.544.0/dist/umd/lucide.min.js"></script>
+<script>
+/* Icons come from a PINNED lucide so an upstream release can't change them mid-study.
+   If that exact version ever fails to resolve, fall back to latest and re-draw — losing
+   every icon in the prototype during a session is a worse outcome than an unpinned one. */
+(function(){
+  if(window.lucide) return;
+  var s=document.createElement('script');
+  s.src='https://unpkg.com/lucide@latest/dist/umd/lucide.min.js';
+  s.onload=function(){ try{ window.lucide && window.lucide.createIcons(); }catch(e){} };
+  document.head.appendChild(s);
+})();
+</script>
+<script>
+  tailwind.config = { theme: { extend: {
+    fontFamily: { sans:['"DM Sans"','system-ui','sans-serif'] },
+    borderRadius: { lg:'12px', xl:'16px', '2xl':'24px', '3xl':'28px' },
+    colors: {
+      paper:'#FAFBFC', surface:'#FFFFFF', ink:'#000000', subink:'#2A2F3D', muted:'#676D7A',
+      line:'#E2E4EB', line2:'#F0F2F5', chip:'#F0F2F5',
+      primary:{ DEFAULT:'#265DDC', foreground:'#FFFFFF' },
+      secondary:{ DEFAULT:'#EFF4FF', foreground:'#265DDC' },
+      success:{ DEFAULT:'#16B76C', foreground:'#027A42', subtle:'#E6FAEE' },
+      sky:'#31ADF5', lilac:'#B380BC', border:'#E2E4EB',
+    },
+  }}};
+</script>
+<style>
+  html,body{height:100%}
+  body{font-family:'DM Sans',system-ui,sans-serif;background:#F0F2F5;color:#000000;-webkit-font-smoothing:antialiased}
+  .no-scrollbar::-webkit-scrollbar{display:none}
+  .no-scrollbar{-ms-overflow-style:none;scrollbar-width:none}
+  /* ═══════════ device frame ═══════════
+     Metrics copied verbatim from onboarding-v10c-desktop.html's >=900px layer. The onboarding
+     navigates here with window.location, so any difference in frame size or radius would read as
+     the window jumping at the handoff. Below 900px this falls back to the phone frame, which is
+     what home-mobile.html serves — a narrow viewport should never get the desktop grid. */
+  .device{width:100%;margin:0 auto;background:#F0F2F5;min-height:100vh;position:relative;overflow:hidden}
+  /* ── desktop: no visible frame, same as onboarding-v10c-desktop.html ──────
+     This was a floating app-card — 1180 wide, 824 tall, radius 28, a drop shadow, and 26px of body
+     padding letterboxing it against a darker #EEF1F6 page — which reads as a device mockup on a
+     backdrop rather than an application. Seamless now: full viewport, no radius, no shadow, no
+     letterbox, and `body` painted the same #F0F2F5 as the device so nothing marks an edge. The
+     260px sidebar therefore sits flush to the viewport edge, which is how home.html's <aside>
+     behaves; the content stays readable via .wrap's own 920px cap inside the work column. */
+  @media(min-width:900px){
+    body{min-height:100vh;padding:0;background:#F0F2F5}
+    .device{width:100%;max-width:none;height:100vh;height:100dvh;min-height:0;margin:0;border-radius:0;box-shadow:none}
+  }
+  /* home.html's .kate-grad-soft, at roughly 20% of its source alphas (blue .45→.09, lilac .32→.06,
+     violet .20→.04 — down again from a first pass at .20/.14/.09, which still read too strong).
+     Why the verbatim values don't transfer: in home.html these radials sit on #FAFBFC behind an
+     opaque card grid that covers most of their area, so only the margins between cards show them.
+     Here the ground is the darker #F0F2F5 and the hero is translucent glass, so much more of the
+     gradient is exposed AND it reads through the card rather than only around it — the same alpha
+     lands far heavier. Hues and positions are untouched; only the alphas move. At this level it is
+     a tint you notice at the edges, not a wash. */
+  .device{
+    background-image:
+      radial-gradient(ellipse at 20% 30%, rgba(174,225,255,0.09) 0%, rgba(174,225,255,0) 60%),
+      radial-gradient(ellipse at 80% 70%, rgba(227,188,235,0.06) 0%, rgba(227,188,235,0) 60%),
+      radial-gradient(ellipse at 55% 50%, rgba(199,178,232,0.04) 0%, rgba(199,178,232,0) 60%);
+    background-repeat:no-repeat;
+  }
+  /* ── scene router (same contract as home-mobile / the onboarding files) ── */
+  .scene{position:absolute;inset:0;display:flex;flex-direction:column;opacity:0;pointer-events:none;transition:opacity .45s ease;overflow:hidden}
+  .scene.on{opacity:1;pointer-events:auto}
+  .scene:not(.on) *{animation-play-state:paused!important}
+  @keyframes fadeInUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
+  .rv{opacity:0;animation:fadeInUp .5s ease forwards;animation-delay:var(--d,0s)}
+  #device.quick .rv{animation:none!important;opacity:1!important;transform:none!important}
+
+  /* ═══════════ app shell — sidebar + work column ═══════════ */
+  .app{display:flex;height:100%;min-height:0}
+  /* 260px + border-r + bg-paper, straight off home.html's <aside>. */
+  .sidebar{width:260px;flex:none;border-right:1px solid #E2E4EB;background:#FAFBFC;display:flex;flex-direction:column;transition:width .26s cubic-bezier(.4,0,.2,1)}
+  #device[data-rail="1"] .sidebar{width:64px}
+  #device[data-rail="1"] .sb-label,#device[data-rail="1"] .sb-sec,#device[data-rail="1"] .nav-badge,#device[data-rail="1"] .sb-word{display:none}
+  #device[data-rail="1"] .nav-item{justify-content:center;padding:10px 0}
+  #device[data-rail="1"] .sb-head{justify-content:center}
+  .sb-head{display:flex;align-items:center;justify-content:space-between;padding:16px 10px 8px}
+  .sb-word{display:inline-flex;align-items:center;gap:8px;min-width:0}
+  .sb-by{font-size:10px;text-transform:uppercase;letter-spacing:.18em;color:#676D7A;margin-left:2px;margin-top:4px}
+  .sb-btn{width:32px;height:32px;border-radius:8px;color:#2A2F3D;display:flex;align-items:center;justify-content:center;transition:.15s;flex:none}
+  .sb-btn:hover{background:rgba(38,93,220,.08)}
+  .sb-body{flex:1;min-height:0;overflow-y:auto;padding:6px 10px 12px}
+  .sb-foot{border-top:1px solid #F0F2F5;padding:10px}
+  .sb-sec{font-size:12px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:#9AA0AC;padding:0 12px;margin:16px 0 6px}
+  .nav-item{display:flex;align-items:center;gap:12px;padding:9px 12px;border-radius:10px;font-size:14px;font-weight:500;color:#2A2F3D;transition:.14s;width:100%;text-align:left}
+  .nav-item:hover{background:#F0F2F5}
+  .nav-item.on{background:#EFF4FF;color:#265DDC;font-weight:600}
+  .nav-item svg{flex:none}
+  .nav-badge{margin-left:auto;font-size:12px;font-weight:600;color:#8F95A3}
+  .avatarJ{width:32px;height:32px;border-radius:9999px;background:#DFF3E6;color:#0E7A4E;font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center;flex:none}
+  /* rail tooltip — the NavTip pattern from home.html / the nav shell */
+  .navtip{position:absolute;left:calc(100% + 8px);top:50%;transform:translateY(-50%);z-index:70;white-space:nowrap;padding:5px 9px;border-radius:6px;background:#000000;color:#fff;font-size:11px;font-weight:500;opacity:0;pointer-events:none;transition:opacity .15s}
+  #device[data-rail="1"] .nav-item{position:relative}
+  #device[data-rail="1"] .nav-item:hover .navtip{opacity:1}
+  #device:not([data-rail="1"]) .navtip{display:none}
+
+  /* the scenes are absolutely positioned children now, so this is their containing block */
+  .workcol{flex:1;min-width:0;display:flex;flex-direction:column;position:relative}
+  /* .scene was full-device; inside the shell it fills the work column instead, so the sidebar
+     stays visible beside every in-product scene rather than being covered by it. */
+  .workcol > .scene{position:absolute;inset:0}
+  /* the voice capture is the exception — it is a sibling of .app and still covers everything */
+  .device > #scene-listen{position:absolute;inset:0;z-index:50}
+  .canvas{flex:1;min-height:0;overflow-y:auto}
+  /* bottom padding clears the floating composer so the last card is never trapped behind it */
+  /* 1280 + 32px gutters, matching home.html's `max-w-[1280px] mx-auto px-8` content column. Was
+     920, which made every card noticeably narrower than the real dashboard. */
+  .wrap{max-width:1280px;margin:0 auto;padding:26px 32px 176px}
+
+  /* ═══════════ page head ═══════════ */
+  .greet{font-size:30px;line-height:1.15;font-weight:700;letter-spacing:-.015em;color:#000000}
+  .greet .nm{background:linear-gradient(90deg,#0D6CA2 0%,#A954B8 100%);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:transparent}
+  .grad-cait{background:linear-gradient(96deg,#7695d7 0%,#af81be 100%);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+  .sec-h{font-size:20px;font-weight:700;line-height:24px;color:#000000}
+
+  /* ═══════════ HERO — "Today's highest-leverage move" ═══════════
+     Anatomy lifted from home.html's `onemove` widget (the impactGrowth branch): white frosted
+     card, left column carries eyebrow / 28px title / body / two pills, right column is a fixed
+     300px impact panel with the Annual Value badge, the 40px figure, the growth curve in its own
+     band, and a dashed-top footer row. Keeping the curve in its own band is deliberate there —
+     full-bleed stretched paths used to cut through the footer text. */
+  .hero{position:relative;overflow:hidden;border-radius:16px;background:rgba(255,255,255,.8);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,.7);box-shadow:0 8px 30px rgba(15,23,42,.07);padding:28px;display:flex;gap:24px;align-items:stretch}
+  .hero::before{content:"";position:absolute;inset:0;pointer-events:none;background-image:linear-gradient(90deg,rgba(235,248,255,.32) 0%,rgba(253,240,255,.32) 100%)}
+  .hero-l{position:relative;z-index:1;flex:1;min-width:0;display:flex;flex-direction:column}
+  .hero-eyb{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.14em;color:#265DDC}
+  .hero-title{font-size:28px;line-height:34px;font-weight:700;color:#000000;margin-top:12px;letter-spacing:-.01em}
+  /* subheads on this screen are #000, not muted grey — these are the lines directly under a
+     heading (hero title, greeting, section headings), so they carry the heading's weight of
+     meaning rather than reading as secondary metadata. */
+  .hero-body{font-size:16px;line-height:1.55;color:#000;margin-top:12px;max-width:560px}
+  .hero-body b{color:#000000;font-weight:600}
+  .hero-act{margin-top:auto;padding-top:24px;display:flex;align-items:center;gap:12px}
+  /* DS medium — 40h, 16/24. Was 44px at 15px type, and neither number is on the
+   Candidly scale (48 / 40 / 32, with body/medium at 16). The phone's lead CTA
+   is now the same 40, so the two dashboards state the same action at the same
+   weight. Padding is 8 rather than 0 so the height comes from type + padding
+   and holds if the label ever wraps. */
+.btn-primary{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:40px;padding:8px 20px;border-radius:9999px;background:#265DDC;color:#fff;font-size:16px;line-height:24px;font-weight:500;transition:.15s}
+  /* #204FBA was an eyeballed darker blue with no token behind it. The DS ships
+     the whole set: background/brand/primary/hovered #0038B9 and .../pressed
+     #0C3699. Pressed and focus were missing entirely. */
+  .btn-primary:hover{background:#0038B9}
+  .btn-primary:active{background:#0C3699}
+  .btn-primary:focus-visible{outline:2px solid #265DDC;outline-offset:2px}
+  /* Same 40, and the padding is 7 rather than 8 because this one carries a 1px
+   border on each side: 1 + 7 + 24 + 7 + 1 = 40. Sitting beside the primary in
+   the same action row, a 42px outline against a 40px fill is exactly the kind
+   of 2px mismatch nobody can name but everybody sees. */
+.btn-outline{display:inline-flex;align-items:center;justify-content:center;min-height:40px;padding:7px 20px;border-radius:9999px;background:#fff;border:1px solid #E2E4EB;color:#000000;font-size:16px;line-height:24px;font-weight:500;transition:.15s}
+  .btn-outline:hover{background:#F0F2F5}
+  /* right — impact panel */
+  .impact{position:relative;z-index:1;width:300px;flex:none;border-radius:16px;border:1px solid #F0F2F5;background:#fff;box-shadow:0 14px 36px -16px rgba(15,23,42,.22);padding:20px;display:flex;flex-direction:column}
+  .imp-badge{display:inline-flex;align-items:center;gap:6px;background:#E6FAEE;color:#027A42;border-radius:8px;padding:4px 9px;font-size:12px;font-weight:600;line-height:16px}
+  .imp-badge svg{width:14px;height:14px}
+  .imp-num{font-size:40px;line-height:44px;font-weight:700;color:#000000;margin-top:12px;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+  .imp-num small{font-size:18px;font-weight:600;color:#676D7A}
+  /* Non-numeric framings land in the same slot as a figure. deriveValue() can return prose instead
+     of a number — "Match fully captured" when the 401(k) match is already maxed, or "auto-transfer"
+     for the savings default — and at .imp-num's 40px a 22-character phrase wraps to two or three
+     lines inside a 300px panel and swamps the card it is meant to headline. Stepped down to 22/28
+     (title/medium on the Foundations scale). The numeral-specific treatment goes too: tabular-nums
+     and the -.02em tracking exist to keep digits aligned and tight, and both hurt prose. */
+  .imp-num.imp-num-text{font-size:22px;line-height:28px;letter-spacing:0;font-variant-numeric:normal}
+  .imp-sub{font-size:16px;color:#000000;font-weight:600;margin-top:6px}
+  .imp-curve{margin-top:16px;margin-left:-4px;margin-right:-4px}
+  .imp-foot{margin-top:auto;padding-top:12px;border-top:1px dashed #E2E4EB;display:flex;align-items:center;justify-content:space-between}
+  .imp-foot span:first-child{font-size:13px;color:#676D7A}
+  .imp-foot span:last-child{font-size:13px;color:#000000;font-weight:500;font-variant-numeric:tabular-nums}
+  /* curve draw-in — the line strokes on, the area fades under it */
+  .impact-line{stroke-dasharray:1;stroke-dashoffset:1;animation:drawline 1.5s cubic-bezier(.4,0,.2,1) .25s forwards}
+  .impact-area{opacity:0;animation:areain .9s ease .75s forwards}
+  @keyframes drawline{to{stroke-dashoffset:0}}
+  @keyframes areain{to{opacity:1}}
+  #device.quick .impact-line{animation:none;stroke-dashoffset:0}
+  #device.quick .impact-area{animation:none;opacity:1}
+
+  /* ═══════════ ranked rows — 2nd + 3rd priority ═══════════
+     Mobile's .nm-row, scaled for the desktop column. Kept as rows rather than promoted to cards
+     so the 1-2-3 ranking under the hero stays legible at a glance. */
+  /* `flex-start`, not `center`. The marker and the chevron were centred against
+   the whole row, so on a one-line row they looked right and on a two-line row
+   the number floated down between the title and the second line of the
+   subtitle -- the taller the copy, the further out it drifted. They anchor to
+   the TITLE now, which is the thing they belong to, and the row can grow
+   underneath without moving them.
+   The 1px top nudge is optical: a 26px badge against an 18px line sits a
+   hair high when both are flush at the top. */
+.nm-row{display:flex;align-items:flex-start;gap:14px;width:100%;text-align:left;cursor:pointer;box-sizing:border-box;padding:16px 18px;border:1px solid #E2E4EB;background:#fff;border-radius:14px;margin-top:10px;transition:.15s}
+  .nm-row:hover{border-color:#9DB6EE;box-shadow:0 8px 22px -16px rgba(19,24,38,.35)}
+  .nm-row:focus-visible{outline:2px solid #265DDC;outline-offset:2px}
+  .nm-num{width:28px;height:28px;border-radius:8px;background:#EFF4FF;color:#265DDC;font-size:14px;font-weight:600;display:flex;align-items:center;justify-content:center;flex:none;margin-top:1px}
+  .nm-title{font-size:16px;font-weight:600;color:#000000;line-height:1.3}
+  .nm-sub{font-size:14px;color:#000000;margin-top:3px}
+  .nm-sub b{color:#0E7A4E;font-weight:700}
+  .nm-chev{margin-left:auto;color:#B4BAC6;flex:none;margin-top:5px}
+  /* Ask Cait pill · home.html's AskCaitPill, verbatim metrics (h8, pl-3.5/pr-2.5, 13px medium,
+     white on 1px #E2E4EB, primary text, Cait mark trailing). Always visible here rather than
+     revealed on hover as it is there: on these rows it IS the stated call to action, and a CTA
+     that only exists on hover doesn't exist on a touch screen. */
+  .askcait{margin-left:auto;flex:none;display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 10px 0 14px;border-radius:9999px;background:#fff;border:1px solid #E2E4EB;color:#265DDC;font-size:13px;font-weight:500;font-family:inherit;cursor:pointer;transition:border-color .15s,background-color .15s}
+  .askcait:hover{border-color:rgba(38,93,220,.4);background:rgba(239,244,255,.5)}
+  .askcait svg{width:16px;height:16px;flex:none}
+
+  /* ═══════════ personalize your workspace ═══════════
+     A 4-up grid, not mobile's horizontal snap-scroller — a desktop column has the width, and a
+     hidden-overflow carousel on a mouse surface hides two of the four steps for no reason. */
+  .wsgrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-top:14px}
+  @media(max-width:1099px){ .wsgrid{grid-template-columns:repeat(2,minmax(0,1fr))} }
+  .wscard{text-align:left;border:1px solid #E2E4EB;background:#fff;border-radius:16px;padding:16px;display:flex;flex-direction:column;transition:.15s}
+  .wscard:hover{border-color:rgba(38,93,220,.4);box-shadow:0 8px 22px -14px rgba(19,24,38,.35)}
+  .ws-ic{width:38px;height:38px;border-radius:12px;display:flex;align-items:center;justify-content:center;margin-bottom:12px;flex:none}
+  .ws-ic.blue{background:#EFF4FF;color:#265DDC}
+  .ws-ic.mint{background:#E7F7EE;color:#0F8956}
+  .ws-ic.violet{background:#F4ECFC;color:#9B5DC7}
+  .ws-ic.amber{background:#FDF0E4;color:#B85A08}
+  /* no top margin needed while the .ws-ic badge is hidden — the title is the card's first element
+     now, and .wscard's own 16px padding is the lead. */
+  .ws-title{font-size:16px;font-weight:700;color:#000000;line-height:1.25}
+  /* #000, not the muted grey. These four card descriptions were held back when the other subheads
+     went black — the reasoning being that card body copy going black would flatten the hierarchy —
+     but Sheetal wants them consistent with the rest, so they read as subheads to their card titles
+     rather than as secondary metadata. */
+  .ws-desc{font-size:14px;color:#000;line-height:1.5;margin-top:4px;flex:1}
+  .ws-foot{display:flex;align-items:center;justify-content:space-between;margin-top:14px}
+  .ws-time{display:inline-flex;align-items:center;gap:5px;font-size:12px;color:#676D7A}
+  .ws-chev{width:28px;height:28px;border-radius:9999px;border:1px solid #E2E4EB;display:flex;align-items:center;justify-content:center;color:#8F95A3;flex:none}
+  .wscard:hover .ws-chev{border-color:rgba(38,93,220,.4);color:#265DDC}
+  .viewall{font-size:14px;font-weight:600;color:#265DDC;flex:none;transition:.15s}
+  .viewall:hover{color:#0038B9}   /* text/brand/hovered, not the same eyeballed #204FBA */
+
+  /* ═══════════ Your Spaces — the Candidly launcher ═══════════
+     Ported from homeLauncher() in prototypes/cait-shell.html (explore/cait-nav-shell). It is a
+     LAUNCHER, not an embed, and that is load-bearing: the Candidly widget carries its own
+     sidebar, and a card cannot host an application that has one. So this offers entries and gets
+     out of the way. */
+  .spaces{border:1px solid #E2E4EB;background:#fff;border-radius:16px;padding:20px 22px;margin-top:14px}
+  .spaces-head{display:flex;align-items:center;justify-content:space-between;gap:12px}
+  .spaces-note{font-size:12px;color:#676D7A;flex:none}
+  .spaces-lede{font-size:14px;color:#000;line-height:1.55;margin-top:8px;max-width:620px}
+  .spaces-row{display:flex;gap:10px;margin-top:16px;flex-wrap:wrap}
+  .btn-tertiary{display:inline-flex;align-items:center;gap:8px;background:#EFF4FF;color:#265DDC;border-radius:8px;padding:10px 14px;font-size:14px;font-weight:600;transition:.15s}
+  .btn-tertiary:hover{background:#E3ECFF}
+  .btn-tertiary svg{width:15px;height:15px;flex:none}
+
+  /* ═══════════ floating composer ═══════════
+     home.html docks it at `fixed bottom-6 left-1/2 -translate-x-1/2 w-[640px]`; absolute here
+     because it belongs to the device frame, not the browser viewport. */
+  .dock{position:absolute;left:50%;transform:translateX(-50%);bottom:22px;width:min(640px,calc(100% - 64px));z-index:30}
+  .composer{background:#fff;border:1px solid #E2E4EB;border-radius:9999px;box-shadow:0 16px 40px -20px rgba(19,24,38,.4);transition:box-shadow .25s,border-color .25s}
+  .composer:focus-within{border-color:transparent;background:linear-gradient(#fff,#fff) padding-box,linear-gradient(135deg,#aee1ff 0%,#c4d9ff 100%) border-box;box-shadow:0 14px 36px -20px rgba(38,93,220,.5)}
+  .csend{width:40px;height:40px;border-radius:9999px;display:inline-flex;align-items:center;justify-content:center;flex:none;border:1px solid #E2E4EB;background:#fff;color:#AEB6C5;transition:.15s}
+  .csend:hover{border-color:#C9D2E0}
+  .csend.on{background:#265DDC;border-color:#265DDC;color:#fff}
+  .csend svg{width:19px;height:19px}
+  .cmic{width:38px;height:38px;border-radius:9999px;display:inline-flex;align-items:center;justify-content:center;flex:none;color:#8A93A6;transition:.15s}
+  .cmic:hover{background:#F0F2F5;color:#2A2F3D}
+  .cmic svg{width:19px;height:19px}
+  .homechip{border:1px solid #E2E4EB;background:rgba(255,255,255,.9);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);border-radius:9999px;padding:7px 13px;font-size:12.5px;font-weight:500;color:#2A2F3D;white-space:nowrap;transition:.15s}
+  .homechip:hover{border-color:#265DDC;color:#265DDC}
+  /* scrim so cards scrolling under the composer don't collide with it */
+  /* The scrim has to be opaque all the way up past the CHIP row, not just the composer. At 150px
+     with the solid stop at 42% it went transparent around 63px — well under the chips, which sit
+     ~120px off the bottom — so section headings scrolled through the gaps between them. 210px tall
+     with the solid stop at 64% holds opaque to ~134px, clearing the chips before it starts to fade. */
+  .dock-scrim{position:absolute;left:0;right:0;bottom:0;height:210px;pointer-events:none;z-index:20;-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);background:linear-gradient(to top,rgba(244,246,250,.97) 0,rgba(244,246,250,.92) 52%,rgba(244,246,250,0) 100%);-webkit-mask-image:linear-gradient(to top,#000 0,#000 60%,transparent 100%);mask-image:linear-gradient(to top,#000 0,#000 60%,transparent 100%)}
+
+  /* ═══════════ chat ═══════════ */
+  #scene-chat{background:#FBFCFD}
+  .chatcol{max-width:760px;margin:0 auto;width:100%}
+  .msg{display:flex;gap:10px;margin-top:16px;align-items:flex-end;animation:msgin .4s ease both}
+  @keyframes msgin{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+  .msg.me{flex-direction:row-reverse}
+  .avat{width:26px;height:26px;flex-shrink:0;margin-bottom:2px}
+  .bub{max-width:76%;padding:11px 15px;border-radius:18px;font-size:14.5px;line-height:1.55}
+  .bub.cait{background:transparent;color:#000000;max-width:88%;padding:3px 2px}
+  .bub.me{background:#ECEEF3;color:#000000;border-bottom-right-radius:6px}
+  .thinking{display:inline-flex;gap:5px;align-items:center}
+  .thinking i{width:7px;height:7px;border-radius:50%;background:#AEB6C6;display:inline-block}
+  .thinking i:nth-child(1){animation:tdot 1.2s infinite}
+  .thinking i:nth-child(2){animation:tdot 1.2s .18s infinite}
+  .thinking i:nth-child(3){animation:tdot 1.2s .36s infinite}
+  @keyframes tdot{0%,60%,100%{transform:translateY(0);opacity:.5}30%{transform:translateY(-4px);opacity:1}}
+  .topbar2{display:flex;align-items:center;justify-content:space-between;padding:14px 22px;flex:none;border-bottom:1px solid #F0F2F5;background:rgba(255,255,255,.8);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+  .tb-btn{width:36px;height:36px;border-radius:9999px;display:flex;align-items:center;justify-content:center;color:#2A2F3D;transition:.15s}
+  .tb-btn:hover{background:#EFF1F6}
+
+  /* ═══════════ voice capture (dark) — ported from home-mobile ═══════════ */
+  #scene-listen{background:radial-gradient(120% 85% at 50% 118%,#16294f 0%,#0b1020 52%,#07090f 100%);transition:background 1.8s ease-out}
+  #scene-listen.vwarm{background:radial-gradient(120% 85% at 50% 118%,#243559 0%,#111629 52%,#08090f 100%)}
+  .vaura{position:absolute;left:50%;bottom:-6%;width:150%;height:52%;pointer-events:none;transform:translateX(-50%);background:radial-gradient(56% 62% at 50% 100%,rgba(96,150,255,.62),rgba(150,96,224,.34) 46%,transparent 72%);filter:blur(44px);animation:vaura 4.4s ease-in-out infinite}
+  @keyframes vaura{0%,100%{opacity:.72;transform:translateX(-50%) scale(1)}50%{opacity:1;transform:translateX(-50%) scale(1.13)}}
+  .vbar{width:3px;border-radius:2px;background:#c3d2ff;height:5px;animation:vwave2 1.15s ease-in-out infinite}
+  @keyframes vwave2{0%,100%{height:5px}50%{height:var(--vh,20px)}}
+  .cait-float{animation:caitfloat 4.5s ease-in-out infinite}
+  @keyframes caitfloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-9px)}}
+  .cait-glow{position:relative;display:inline-flex}
+  .cait-glow::before{content:"";position:absolute;inset:-40px;border-radius:9999px;background:radial-gradient(closest-side at 32% 28%,rgba(96,150,255,.6),transparent 70%),radial-gradient(closest-side at 72% 76%,rgba(203,153,213,.52),transparent 70%);filter:blur(24px);z-index:-1;animation:caitglow 5s ease-in-out infinite}
+  @keyframes caitglow{0%,100%{opacity:.5;transform:scale(1)}50%{opacity:.92;transform:scale(1.16)}}
+  .vctrl2{width:52px;height:52px;border-radius:9999px;background:rgba(255,255,255,.1);color:rgba(255,255,255,.85);display:flex;align-items:center;justify-content:center;transition:.15s}
+  .vctrl2:hover{background:rgba(255,255,255,.2);color:#fff}
+  .listen-pulse{animation:lpulse 1.5s ease-in-out infinite}
+  @keyframes lpulse{0%,100%{opacity:.5}50%{opacity:1}}
+  .tscript{position:relative;height:150px;width:100%;max-width:720px;overflow:hidden;-webkit-mask-image:linear-gradient(to bottom,transparent 0,#000 36%,#000 100%);mask-image:linear-gradient(to bottom,transparent 0,#000 36%,#000 100%)}
+  .tsinner{position:absolute;left:0;right:0;top:0;text-align:center;line-height:1.55;font-size:22px;font-weight:500;transform:translateY(150px);transition:transform .62s cubic-bezier(.22,.61,.36,1)}
+  .word{display:inline-block;opacity:0;transform:translateY(6px);color:#fff;margin-right:.28em;transition:opacity .55s ease-out,transform .55s cubic-bezier(.2,.7,.3,1)}
+  .word.in{opacity:.5;transform:none}
+  .word.hot{opacity:1}
+  .vorb{position:relative;display:inline-flex;align-items:center;justify-content:center;isolation:isolate}
+  .halo{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);border-radius:9999px;pointer-events:none;z-index:-1}
+  .hh1{width:158px;height:158px;background:radial-gradient(closest-side,rgba(175,150,240,.40),rgba(150,175,255,.18) 58%,transparent 76%);filter:blur(14px);animation:halopulse 4.6s ease-in-out infinite}
+  .hh2{width:232px;height:232px;background:radial-gradient(closest-side,transparent 52%,rgba(160,170,250,.30) 70%,transparent 88%);filter:blur(20px);animation:halopulse 4.6s ease-in-out .7s infinite}
+  @keyframes halopulse{0%,100%{opacity:.5;transform:translate(-50%,-50%) scale(.97)}50%{opacity:1;transform:translate(-50%,-50%) scale(1.05)}}
+  .vwave{display:flex;align-items:center;justify-content:center;gap:3px;height:32px;margin-top:26px}
+
+  /* ═══════════ toast ═══════════ */
+  .toast{position:absolute;left:50%;transform:translateX(-50%) translateY(10px);bottom:96px;z-index:80;background:#000000;color:#fff;font-size:13px;font-weight:500;padding:10px 16px;border-radius:9999px;box-shadow:0 18px 44px -18px rgba(0,0,0,.6);opacity:0;pointer-events:none;transition:opacity .22s,transform .22s;max-width:82%;text-align:center}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+  /* ── below 900px: degrade, don't pretend ──────────────────────────────────
+     This file deliberately does NOT have a phone layout — home-mobile.html is the phone surface,
+     and onboarding-v10c.html routes there. It first carried the 440px phone frame copied from that
+     file, which was actively wrong: a 260px sidebar inside a 440px frame left ~180px of canvas, so
+     the hero stacked into one-word-per-line and the impact panel overlapped the copy. Narrow now
+     drops the frame entirely (full-bleed, no rounding), forces the sidebar to its icon rail, and
+     stacks the hero — legible at any width without impersonating the mobile design.
+     THIS BLOCK MUST STAY LAST. It overrides single-class component rules (.sidebar, .sb-word, …)
+     at equal specificity, so it only wins by source order. Sitting near the top of the stylesheet
+     — where it was first written — the later .sidebar{width:260px} beat it and the rail silently
+     did nothing below 900px. Do not move it back up; add new narrow overrides here. */
+  @media(max-width:899px){
+    .wrap{padding:20px 20px 176px}
+    .hero{flex-direction:column;padding:22px}
+    .impact{width:auto}
+    .greet{font-size:26px}
+    .dock{width:calc(100% - 32px)}
+    .wsgrid{grid-template-columns:repeat(2,minmax(0,1fr))}
+    /* the collapse control is hidden here — expanding to 260px is what broke this in the first place */
+    #railToggle{display:none}
+    /* The rail below 900px is enforced in CSS, deliberately duplicating the [data-rail="1"]
+       declarations above rather than having JS set that attribute on a breakpoint listener. Both
+       `resize` and matchMedia's `change` can fail to fire when the viewport is changed
+       programmatically (CDP metrics overrides do exactly this), which stranded the 260px sidebar
+       inside a narrow canvas — the original bug. A media query cannot miss its own breakpoint.
+       JS now owns only the user's manual toggle, which is desktop-only. */
+    .sidebar{width:64px}
+    .sb-label,.sb-sec,.nav-badge,.sb-word{display:none}
+    .nav-item{justify-content:center;padding:10px 0;position:relative}
+    .sb-head{justify-content:center}
+    .navtip{display:block}
+    .nav-item:hover .navtip{opacity:1}
+  }
+  @media(max-width:560px){ .wsgrid{grid-template-columns:1fr} }
+</style>
+</head>
+<body>
+<div class="device" id="device" data-rail="0">
+
+  <!-- ════════════════════ WORKSPACE (home) ════════════════════ -->
+  <!-- ═══════════════ APP SHELL · persistent ═══════════════
+       The sidebar sits OUTSIDE the scenes so it survives every in-product navigation. It used to
+       live inside #scene-home, which meant switching to chat destroyed it — and that is precisely
+       why chat and Ask Cait had grown their own top bar with a back arrow and a centred Cait mark:
+       they were compensating for losing the nav. With one persistent shell, "back" is just the
+       sidebar's Home item, and the Cait lockup lives in exactly one place instead of two. -->
+  <div class="app">
+
+      <!-- ── sidebar ── -->
+      <aside class="sidebar">
+        <div class="sb-head">
+          <span class="sb-word"><span id="sbMark"></span><span class="sb-label" style="font-size:20px;font-weight:700;line-height:24px">Cait</span><span class="sb-by sb-label">by Candidly</span></span>
+          <button class="sb-btn" id="railToggle" aria-label="Collapse sidebar"><i data-lucide="panel-left-close" class="w-4 h-4"></i></button>
+        </div>
+        <div class="sb-body no-scrollbar">
+          <button class="nav-item" id="navNewChat"><i data-lucide="message-square-plus" class="w-[18px] h-[18px]"></i><span class="sb-label">New chat</span><span class="navtip">New chat</span></button>
+          <button class="nav-item on" id="navHome"><i data-lucide="home" class="w-[18px] h-[18px]"></i><span class="sb-label">Home</span><span class="navtip">Home</span></button>
+          <button class="nav-item" data-ask="Show me my memory — what does Cait know about me?"><i data-lucide="book-open" class="w-[18px] h-[18px]"></i><span class="sb-label">Memory</span><span class="navtip">Memory</span></button>
+          <!-- First run: no saved Dashboards or Conversations yet. Those groups appear as Cait
+               creates them, so an empty-but-present section would be a promise, not a state. -->
+        </div>
+        <div class="sb-foot">
+          <button class="nav-item" data-ask="Manage my connected accounts."><i data-lucide="landmark" class="w-[18px] h-[18px]"></i><span class="sb-label">Connected accounts</span><span class="nav-badge sb-label" style="display:inline-flex;align-items:center;gap:6px">6 <span style="width:6px;height:6px;border-radius:9999px;background:#F59F1D;display:inline-block"></span></span><span class="navtip">Connected accounts</span></button>
+          <div class="nav-item" style="cursor:default"><span class="avatarJ"><i data-lucide="user" class="w-[15px] h-[15px]"></i></span><span class="sb-label" style="min-width:0"><span style="display:block;font-size:13.5px;font-weight:600;color:#000000;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">My account</span><span style="display:block;font-size:11.5px;color:#676D7A;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Acme Corp</span></span></div>
+        </div>
+      </aside>
+
+      <!-- ── work column ── -->
+      <!-- work column · every in-product scene renders inside this, beside the persistent sidebar -->
+      <div class="workcol">
+      <section class="scene on" id="scene-home">
+        <div class="canvas no-scrollbar" id="homeScroll">
+          <div class="wrap">
+
+            <!-- page head — echoes the onboarding's "Here's your plan" so the handoff reads continuous -->
+            <div class="rv" style="--d:0ms">
+              <div style="font-size:12.5px;color:#676D7A;font-weight:500;margin-bottom:6px" id="dateLine">Friday · 7:42am</div>
+              <h1 class="greet" id="greetLine">Here&rsquo;s your <span class="nm">plan.</span></h1>
+              <p style="font-size:16px;color:#000;margin-top:8px;line-height:1.5" id="greetSub">Built around your priorities — Acme is already pulling for each one.</p>
+            </div>
+
+            <!-- 1 · hero -->
+            <div class="rv" style="--d:90ms;margin-top:22px" id="heroWrap"></div>
+
+            <!-- 2 · 2nd + 3rd priority, ranked rows -->
+            <div class="rv" style="--d:170ms;margin-top:16px" id="nextWrap"></div>
+
+            <!-- 3 · personalize your workspace -->
+            <div class="rv" style="--d:250ms;margin-top:34px">
+              <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:4px">
+                <h2 class="sec-h">Let's personalize your workspace</h2>
+                <button class="viewall" data-ask="Show me all the ways to personalize Cait.">View all (6)</button>
+              </div>
+              <p style="font-size:14px;color:#000">A few quick steps to get the most out of Cait.</p>
+              <div class="wsgrid" id="wsGrid"></div>
+            </div>
+
+            <!-- 4 · Your Spaces — the Candidly launcher -->
+            <div class="rv" style="--d:330ms;margin-top:34px">
+              <h2 class="sec-h">Your Spaces</h2>
+              <div class="spaces" id="spacesCard"></div>
+            </div>
+
+          </div>
+        </div>
+        <div class="dock-scrim" aria-hidden="true"></div>
+        <div class="dock">
+          <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-bottom:10px" id="homeChips"></div>
+          <div class="composer" style="display:flex;align-items:center;gap:4px;padding:6px 8px 6px 20px">
+            <input id="homeInput" class="flex-1 min-w-0 bg-transparent text-[15px] text-ink outline-none placeholder:text-muted py-2" placeholder="Ask Cait anything" />
+            <button id="homeMic" class="cmic" aria-label="Talk"><i data-lucide="mic"></i></button>
+            <button id="homeSend" class="csend" aria-label="Send"><i data-lucide="arrow-up"></i></button>
+          </div>
+        </div>
+      </section>
+
+  <!-- ════════════════════ CHAT ════════════════════
+       No top bar. The sidebar is still on screen, so there is nothing to navigate back FROM and no
+       second place to put the Cait mark. -->
+  <section class="scene" id="scene-chat">
+    <div id="chatScroll" class="flex-1 min-h-0 overflow-y-auto no-scrollbar px-8 pt-4 pb-6">
+      <div id="thread" class="chatcol"></div>
+    </div>
+    <div id="chatFooter" class="shrink-0 px-8 pt-2 pb-7"></div>
+  </section>
+
+  <!-- ════════════════════ ASK CAIT · landing ════════════════════ -->
+  <section class="scene" id="scene-askcait">
+    <div class="flex-1 min-h-0 flex flex-col px-8 pb-8">
+      <div class="text-center flex-1 flex flex-col justify-center">
+        <p style="font-size:16px;color:#676D7A" class="rv" style="--d:100ms">Hi there</p>
+        <h1 style="font-size:38px;font-weight:700;line-height:1.1;margin-top:6px" class="rv">Ask <span class="grad-cait">Cait</span></h1>
+        <p style="font-size:15px;color:#676D7A;margin-top:10px;max-width:420px;margin-left:auto;margin-right:auto;line-height:1.5" class="rv">Your AI assistant for your whole financial picture.</p>
+      </div>
+      <div class="shrink-0" style="max-width:640px;margin:0 auto;width:100%">
+        <div id="acChips" style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-bottom:12px"></div>
+        <div class="composer" style="display:flex;align-items:center;gap:4px;padding:6px 8px 6px 20px">
+          <input id="acIn" class="flex-1 min-w-0 bg-transparent text-[15px] text-ink outline-none placeholder:text-muted py-2" placeholder="Ask Cait anything" />
+          <button id="acMic" class="cmic" aria-label="Talk"><i data-lucide="mic"></i></button>
+          <button id="acSend" class="csend" aria-label="Send"><i data-lucide="arrow-up"></i></button>
+        </div>
+      </div>
+    </div>
+  </section>
+      </div><!-- /.workcol -->
+    </div><!-- /.app · shell ends; the voice capture below is deliberately OUTSIDE it -->
+
+  <!-- ════════════════════ VOICE capture ════════════════════
+       Stays outside the shell on purpose: it is a full-bleed modal state, not a place in the app,
+       so it covers the sidebar rather than sitting beside it. -->
+  <section class="scene" id="scene-listen" data-vstate="listening">
+    <div class="flex items-center justify-between px-7 pt-6 relative z-10 shrink-0">
+      <div style="font-size:14px;color:rgba(255,255,255,.75);font-weight:500" class="inline-flex items-center gap-2"><i data-lucide="audio-lines" class="listen-pulse w-4 h-4"></i> <span id="listenState">Cait is listening…</span></div>
+      <span style="font-size:12px;color:rgba(255,255,255,.45)" class="inline-flex items-center gap-1.5"><i data-lucide="lock" class="w-3 h-3"></i> Audio isn't stored</span>
+    </div>
+    <div class="flex-1 min-h-0 flex flex-col items-center justify-center px-8 relative z-10 text-center">
+      <div class="vorb"><span class="halo hh2" aria-hidden="true"></span><span class="halo hh1" aria-hidden="true"></span><span class="cait-glow cait-float" id="listenMark"></span></div>
+      <div class="vwave">
+        <span class="vbar" style="--vh:11px;animation-delay:.55s"></span><span class="vbar" style="--vh:15px;animation-delay:.44s"></span><span class="vbar" style="--vh:21px;animation-delay:.33s"></span><span class="vbar" style="--vh:26px;animation-delay:.22s"></span><span class="vbar" style="--vh:29px;animation-delay:.11s"></span><span class="vbar" style="--vh:31px;animation-delay:0s"></span><span class="vbar" style="--vh:29px;animation-delay:.11s"></span><span class="vbar" style="--vh:26px;animation-delay:.22s"></span><span class="vbar" style="--vh:21px;animation-delay:.33s"></span><span class="vbar" style="--vh:15px;animation-delay:.44s"></span><span class="vbar" style="--vh:11px;animation-delay:.55s"></span>
+      </div>
+      <div class="tscript mt-6"><div class="tsinner" id="tsInner"></div></div>
+    </div>
+    <div class="vaura"></div>
+    <div class="relative z-10 mt-auto flex items-center justify-center gap-7 pb-12 shrink-0">
+      <button id="listenText" class="vctrl2" aria-label="Type instead"><i data-lucide="keyboard" class="w-5 h-5"></i></button>
+      <button id="listenDone" class="w-16 h-16 rounded-full flex items-center justify-center text-white shadow-[0_12px_34px_-8px_rgba(38,93,220,.9)]" style="background:#265DDC" aria-label="Done"><i data-lucide="check" class="w-7 h-7"></i></button>
+      <button id="listenExit" class="vctrl2" aria-label="Exit"><i data-lucide="x" class="w-5 h-5"></i></button>
+    </div>
+  </section>
+
+  <div class="toast" id="toast"></div>
+</div>
+
+<script>
+(function(){
+  var $=function(s,r){return (r||document).querySelector(s);};
+  var $$=function(s,r){return Array.prototype.slice.call((r||document).querySelectorAll(s));};
+  function icons(){ if(window.lucide) lucide.createIcons(); }
+  var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var QUICK = reduce || /[?&]fast=1/.test(location.search);
+  if(QUICK){ $('#device').classList.add('quick'); }
+
+  function sleep(ms){ return new Promise(function(r){ setTimeout(r, QUICK?Math.min(ms,120):ms); }); }
+  function typeInto(el, text, cps){
+    return new Promise(function(resolve){
+      if(QUICK){ el.textContent=text; resolve(); return; }
+      var i=0, step=1000/(cps||42);
+      var iv=setInterval(function(){ i++; el.textContent=text.slice(0,i); if(i>=text.length){ clearInterval(iv); resolve(); } }, step);
+    });
+  }
+  function esc(s){ return (s||'').replace(/"/g,'&quot;'); }
+
+  /* ── Cait mark (same paths as home-mobile / the onboarding files) ── */
+  function caitMark(px,gid){ return '<svg width="'+px+'" height="'+px+'" viewBox="0 0 28 28" fill="none" style="display:inline-block;vertical-align:middle"><path d="M27.8551 18.4464C27.7614 18.3306 27.631 18.2515 27.4863 18.2227C25.9668 17.9192 24.7644 16.7058 24.4702 15.2182C24.441 15.072 24.363 14.9405 24.2494 14.8461C24.1359 14.7517 23.9937 14.7001 23.847 14.7001C23.7003 14.7001 23.5581 14.7517 23.4445 14.8461C23.3309 14.9405 23.2529 15.072 23.2237 15.2182C22.9295 16.7058 21.6332 17.92 20.1136 18.2235C19.9689 18.2524 19.8386 18.3314 19.7449 18.4473C19.6512 18.563 19.6 18.7083 19.6 18.8583C19.6 19.0082 19.6512 19.1535 19.7449 19.2693C19.8386 19.3851 19.9689 19.4642 20.1136 19.493C21.6332 19.7957 22.9295 21.0936 23.2237 22.5821C23.2529 22.7283 23.3309 22.8597 23.4445 22.9541C23.5581 23.0485 23.7003 23.1001 23.847 23.1001C23.9937 23.1001 24.1359 23.0485 24.2494 22.9541C24.363 22.8597 24.441 22.7283 24.4702 22.5821C24.7644 21.0936 25.9668 19.7957 27.4863 19.4921C27.631 19.4633 27.7614 19.3842 27.8551 19.2685C27.9488 19.1526 28 19.0074 28 18.8574C28 18.7074 27.9488 18.5622 27.8551 18.4464Z" fill="#CB99D5"/><rect width="16.8" height="7.7" rx="3.85" transform="matrix(1 0 0 -1 0 22.75)" fill="url(#'+gid+')"/><rect width="16.8" height="7.7" rx="3.85" transform="matrix(1 0 0 -1 11.2002 12.25)" fill="#265DDC"/><ellipse cx="3.85" cy="3.85" rx="3.85" ry="3.85" transform="matrix(-1 8.7422e-08 8.74235e-08 1 7.7002 4.55005)" fill="#265DDC"/><defs><linearGradient id="'+gid+'" x1="0" y1="3.85" x2="16.8" y2="3.85" gradientUnits="userSpaceOnUse"><stop stop-color="#ACDEFC"/><stop offset="1" stop-color="#CB99D5"/></linearGradient></defs></svg>'; }
+  function caitBig(px){ return '<svg width="'+px+'" height="'+(px*0.635)+'" viewBox="0 0 257 163" fill="none"><g clip-path="url(#clipHD)"><path d="M31.92 64.7C49.5489 64.7 63.84 50.4089 63.84 32.78C63.84 15.1511 49.5489 0.859985 31.92 0.859985C14.2911 0.859985 0 15.1511 0 32.78C0 50.4089 14.2911 64.7 31.92 64.7Z" fill="white"/><path d="M117.5 64.53H224.3C242.07 64.53 256.57 50.04 256.57 32.26C256.57 14.49 242.08 -0.0100098 224.3 -0.0100098H117.5C99.73 -0.0100098 85.23 14.48 85.23 32.26C85.23 50.03 99.72 64.53 117.5 64.53Z" fill="white"/><path d="M32.27 156.32H127.86C145.63 156.32 160.13 141.83 160.13 124.05C160.13 106.28 145.64 91.78 127.86 91.78H32.27C14.49 91.79 0 106.29 0 124.06C0 141.83 14.49 156.33 32.27 156.33V156.32Z" fill="url(#paintHD)"/><path d="M255.19 119.92C254.33 118.88 253.12 118.19 251.91 117.85C238.11 115.09 227.24 104.05 224.48 90.59C224.13 89.21 223.44 88 222.41 87.14C221.37 86.28 220.17 85.76 218.79 85.76C217.41 85.76 216.2 86.28 215.17 87.14C214.14 88 213.44 89.21 213.1 90.59C210.51 104.05 198.61 115.09 184.8 117.85C183.42 118.2 182.38 118.89 181.52 119.92C180.66 120.95 180.14 122.34 180.14 123.72C180.14 125.1 180.66 126.48 181.52 127.52C182.38 128.56 183.59 129.25 184.8 129.59C198.6 132.35 210.34 144.08 213.1 157.54C213.45 158.92 214.14 160.13 215.17 160.99C216.2 161.85 217.41 162.37 218.79 162.37C220.17 162.37 221.38 161.85 222.41 160.99C223.44 160.13 224.14 158.92 224.48 157.54C227.07 144.08 238.11 132.35 251.91 129.59C253.29 129.24 254.33 128.55 255.19 127.52C256.05 126.49 256.57 125.1 256.57 123.72C256.57 122.34 256.05 120.96 255.19 119.92Z" fill="#CB99D5"/></g><defs><linearGradient id="paintHD" x1="0" y1="124.06" x2="160.12" y2="124.06" gradientUnits="userSpaceOnUse"><stop stop-color="#ACDEFC"/><stop offset="1" stop-color="#CB99D5"/></linearGradient><clipPath id="clipHD"><rect width="256.57" height="162.36" fill="white"/></clipPath></defs></svg>'; }
+  $('#sbMark').innerHTML   = caitMark(26,'m-sb');
+  // #chatMark is gone with the chat top bar — the Cait lockup lives only in the sidebar now.
+  $('#listenMark').innerHTML = caitBig(84);
+
+  /* ══════════════════════════════════════════════════════════════
+     PRIORITIES — handed over from the onboarding through sessionStorage.
+     Same key and same shape home-mobile.html reads, so either workspace
+     can consume the identical handoff and neither owns the contract.
+     ══════════════════════════════════════════════════════════════ */
+  var DEFAULT=[{icon:'home',label:'Buy a home'},{icon:'trending-up',label:'Grow retirement'},{icon:'credit-card',label:'Pay off debt'}];
+  var priorities=DEFAULT, planFmt='chart', estAnswers=null;
+  try{ var raw=sessionStorage.getItem('caitPlan'); if(raw){ var p=JSON.parse(raw); if(p&&p.priorities&&p.priorities.length){ priorities=p.priorities; planFmt=p.fmt||'chart'; } if(p&&p.answers&&Object.keys(p.answers).length){ estAnswers=p.answers; } } }catch(e){}
+
+  /* ── base move per priority · ported verbatim from home-mobile.html ── */
+  /* Each move carries a `topic`. The plan dedupes on topic, not on title: "Make the most
+     of my benefits" and "On track to retire" produce differently-worded rows that are the
+     same advice (raise your 401(k) to the 5% match), and title-matching missed that.
+     Order matters here — the first test that hits wins, so narrower phrases go first
+     ("Save for a trip" contains "save"; "Grow retirement" contains "grow"). */
+  function moveBaseFor(label){
+    var t=(label||'').toLowerCase();
+    if(/home|house|down|property/.test(t))  return {topic:'home', goal:'Buy a home', title:'Start your down-payment autosave', num:'$420/mo', sub:'on track for 2028', cta:'Show me how', ask:'How do I get to my down payment faster?'};
+    if(/retire|401|pension/.test(t))        return {topic:'401k', goal:'Grow retirement', title:'Capture your full Acme 401(k) match', num:'+$1,880/yr', sub:"free money you're not collecting", cta:'Show me how', ask:'How do I get my full 401(k) match?'};
+    if(/debt|loan|card|credit/.test(t))     return {topic:'debt', goal:'Pay off debt', title:'Point your Acme perk at your priciest card', num:'$100/mo', sub:'clears about 7 months sooner', cta:'Show me how', ask:'How do I pay off my debt faster?'};
+    if(/benefit|acme|employer|match/.test(t)) return {topic:'401k', goal:'Your benefits', title:'Bump your 401(k) to the full match', num:'+$1,880/yr', sub:"Acme match you're leaving behind", cta:'Claim it', ask:'What Acme benefits am I missing?'};
+    if(/trip|travel|vacation/.test(t))      return {topic:'trip', goal:'Save for a trip', title:'Trip fully funded', num:'$250/mo', sub:'so the trip never borrows from your goals', cta:'Show me how', ask:'Help me save for a trip.'};
+    if(/invest|market|stock|portfolio|grow|wealth/.test(t)) return {topic:'invest', goal:'Start investing', title:'Open a simple starter portfolio', num:'$300/mo', sub:'a low-stress pace to begin', cta:'Show me how', ask:'How should I start investing?'};
+    if(/educat|school|tuition|529/.test(t)) return {topic:'education', goal:'Plan for education', title:'Open a 529 with your Acme benefit', num:'~40% by Acme', sub:'employer help toward school', cta:'Claim it', ask:'Help me plan for education costs.'};
+    if(/cushion|safety net|emergency|rainy|savings|save/.test(t)) return {topic:'savings', goal:'Build savings', title:'A 3-month safety net', num:'auto-transfer', sub:'a cushion, a little each payday', cta:'Show me how', ask:'Help me build my safety net.'};
+    if(/clarity|clear|organi|overwhelm|picture|understand|where i stand/.test(t)) return {topic:'clarity', goal:'Get clarity', title:'See everything in one place', num:'one view', sub:'what you have and what you owe, together', cta:'Show me how', ask:'Help me see where I stand.'};
+    if(/budget|control|spend|fee|paycheck|tight/.test(t)) return {topic:'cashflow', goal:'Cash flow', title:'Trim your recurring fees', num:'$340/mo', sub:'lighter, without changing your life', cta:'Show me how', ask:'Where can I cut my spending?'};
+    return {topic:'savings', goal:'Build savings', title:'A 3-month safety net', num:'auto-transfer', sub:'a cushion, a little each payday', cta:'Show me how', ask:'Help me build my safety net.'};
+  }
+  /* ── the estimate the user gave turns the base framing into their number ── */
+  function deriveValue(goal, ans){
+    if(!ans) return null;
+    if(goal==='Buy a home' && ans[1]!=null){
+      var saved={'Not yet':0,'<$5k':2500,'$5–15k':10000,'$15k+':17000}[ans[1]]; if(saved==null) return null;
+      var mo=Math.max(Math.round((20000-saved)/28/10)*10, 60);
+      var from={'Not yet':'to reach it starting from $0 saved','<$5k':"building on the <$5k you've saved",'$5–15k':'on top of your $5–15k saved','$15k+':"you're nearly there — this closes it"}[ans[1]];
+      return {num:'$'+mo+'/mo', sub:from};
+    }
+    if((goal==='Your benefits'||goal==='Grow retirement') && ans[0]!=null){
+      var gap={'Nothing yet':1880,'1–3%':1120,'4–6%':260,'7%+':0,'Not sure':1880}[ans[0]]; if(gap==null) return null;
+      if(gap===0) return {num:'Match fully captured', sub:"you're already past the 5% match — nicely done"};
+      return {num:'+$'+gap.toLocaleString()+'/yr', sub:(ans[0]==='4–6%'?'a little Acme match still on the table':"Acme match you're not collecting yet")};
+    }
+    /* answers are keyed by the question's ORIGINAL index in QUESTIONS.
+       0 = 401(k) · 1 = down payment · 2 = debt owed · 3 = $1k surprise */
+    if(goal==='Build savings' && ans[3]!=null){
+      var plan={'Savings':{mo:120,note:"you'd cover a $1k surprise today — this tops up a full 3-month net"},'Credit card':{mo:180,note:'a $1k surprise would land on your card — this builds a real cushion'},'Manage':{mo:150,note:"you'd manage — this makes it a genuine safety net"},'Not sure':{mo:150,note:'a 3-month cushion, a little each payday'}}[ans[3]]; if(!plan) return null;
+      return {num:'$'+plan.mo+'/mo', sub:plan.note};
+    }
+    /* Debt now has its own question, so the payoff row is derived from what they owe
+       instead of asserting a fixed "$100/mo · clears about 7 months sooner". The $100/mo
+       is Acme's student-loan contribution (see the benefits list in onboarding); the
+       months saved scale with the balance. */
+    if(goal==='Pay off debt' && ans[2]!=null){
+      var owed={'Under $5k':{mo:100,note:"Acme's $100/mo clears it roughly 9 months sooner"},'$5–15k':{mo:100,note:"Acme's $100/mo takes about 7 months off your payoff"},'$15–25k':{mo:100,note:"Acme's $100/mo takes about 5 months off your payoff"},'$25k+':{mo:100,note:"Acme's $100/mo starts chipping in from day one"}}[ans[2]]; if(!owed) return null;
+      return {num:'$'+owed.mo+'/mo', sub:owed.note};
+    }
+    return null;
+  }
+  function moveFor(label){
+    var b=moveBaseFor(label), d=deriveValue(b.goal, estAnswers);
+    if(d){ b.num=d.num; b.sub=d.sub; }
+    return b;
+  }
+  /* ── why this number · ported verbatim ── */
+  function contextFor(lead){
+    switch(lead.goal){
+      case 'Buy a home':      return "Sized to a 5% down payment by 2028 and what you've saved so far — paced to fit your take-home.";
+      case 'Your benefits':   return "Acme matches up to 5% — the fastest guaranteed return you have. I set this to your current contribution.";
+      case 'Grow retirement': return "Based on your pace plus Acme's match, compounding to 65 — starting sooner is what moves it most.";
+      case 'Pay off debt':    return "Aimed at your highest-rate balance first, so more of every payment goes to principal.";
+      case 'Build savings':   return "A 3-month cushion is the target — I sized it to how you'd cover a surprise today.";
+      case 'Start investing': return "A steady, low-stress starter pace — set so it never crowds out your other goals.";
+      case 'Cash flow':       return "Trimmed from recurring fees I can see — lighter spending without changing your day-to-day.";
+      default:                return "Built from your goals and what Acme already offers you.";
+    }
+  }
+  /* ── the impact panel's footer pair. home.html's HERO_MOVES carries a `foot:[label,value]` on
+        every move; these are this file's equivalents, one per goal, so the panel never renders a
+        footer rule with nothing under it. ── */
+  function footFor(goal){
+    switch(goal){
+      case 'Buy a home':         return ['Target','2028'];
+      case 'Your benefits':      return ['Take-home','−$74/mo'];
+      case 'Grow retirement':    return ['Take-home','−$74/mo'];
+      case 'Pay off debt':       return ['Paid off','7 mo sooner'];
+      case 'Build savings':      return ['Cushion','3 months'];
+      case 'Start investing':    return ['Over 10 yrs','~$48k'];
+      case 'Cash flow':          return ['Reviewed','12 subscriptions'];
+      case 'Plan for education': return ['Covered by Acme','~40%'];
+      case 'Save for a trip':    return ['Funded by','on schedule'];
+      default:                   return ['Horizon','This year'];
+    }
+  }
+  function numHTML(n){ return String(n).replace(/\/(yr|mo)/, '<small>/$1</small>'); }
+  /* the count-up needs a number; a non-numeric framing ("Match fully captured", "auto-transfer")
+     has nothing to count, so those render as plain text instead of animating. */
+  function numOf(s){ var m=String(s).replace(/,/g,'').match(/\d+/); return m?parseInt(m[0],10):null; }
+
+  /* ══════════════════ 1 · HERO ══════════════════ */
+  function renderHero(){
+    var lead=moveFor(priorities[0].label), foot=footFor(lead.goal), n=numOf(lead.num);
+    var prefix=String(lead.num).replace(/[\d,].*$/,'');            // "+$" / "$" / "~" / ""
+    var suffix=(String(lead.num).match(/\/(yr|mo)$/)||[''])[0];
+    $('#heroWrap').innerHTML =
+      '<div class="hero">'
+      + '<div class="hero-l">'
+      +   '<span class="hero-eyb">Today’s highest-leverage move</span>'
+      +   '<h2 class="hero-title">'+lead.title+'</h2>'
+      +   '<p class="hero-body">'+contextFor(lead)+'</p>'
+      +   '<div class="hero-act">'
+      +     '<button class="btn-primary" data-ask="'+esc(lead.ask)+'">'+lead.cta+' <i data-lucide="arrow-right" class="w-4 h-4"></i></button>'
+      +     '<button class="btn-outline" data-ask="Show me the math behind this.">See the math</button>'
+      +   '</div>'
+      + '</div>'
+      + '<div class="impact">'
+      +   '<div class="imp-badge"><i data-lucide="party-popper"></i> Annual Value</div>'
+      +   '<div class="imp-num'+(n==null?' imp-num-text':'')+'" id="impNum">'+(n!=null ? prefix+'0'+(suffix?'<small>'+suffix+'</small>':'') : numHTML(lead.num))+'</div>'
+      +   '<div class="imp-sub">'+lead.sub+'</div>'
+      +   '<div class="imp-curve">'
+      +     '<svg viewBox="0 0 280 84" style="display:block;width:100%;height:84px" preserveAspectRatio="none" aria-hidden="true">'
+      +       '<defs><linearGradient id="impArea" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#E7EEFF"/><stop offset="1" stop-color="#E7EEFF" stop-opacity="0"/></linearGradient>'
+      +       '<linearGradient id="impStroke" x1="0" y1="0" x2="1" y2="0"><stop stop-color="#0D6CA2"/><stop offset="1" stop-color="#A954B8"/></linearGradient></defs>'
+      +       '<path class="impact-area" d="M0,74 C66,70 112,60 160,42 C206,25 244,14 280,6 L280,84 L0,84 Z" fill="url(#impArea)"/>'
+      +       '<path class="impact-line" id="impLine" d="M0,74 C66,70 112,60 160,42 C206,25 244,14 280,6" fill="none" stroke="url(#impStroke)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>'
+      +     '</svg>'
+      +   '</div>'
+      +   '<div class="imp-foot"><span>'+foot[0]+'</span><span>'+foot[1]+'</span></div>'
+      + '</div>'
+      + '</div>';
+    icons();
+    // dash length has to come off the real path, not a guess, or the stroke either jumps or stalls
+    var line=$('#impLine');
+    if(line){ var L=line.getTotalLength(); line.style.strokeDasharray=L; line.style.strokeDashoffset=QUICK?0:L; }
+    if(n!=null) countUp($('#impNum'), n, prefix, suffix);
+  }
+  /* The animation is decoration; the final number is not. Browsers throttle requestAnimationFrame
+     to roughly 1fps in a hidden or occluded tab, so a plain rAF ramp strands partway and leaves a
+     WRONG figure on screen — observed live: a $1,120 value frozen at "+$67/yr", which reads as
+     authoritative rather than unfinished. That is the worst possible failure for a money number,
+     so the true value is guaranteed three ways: skipped straight to when the tab starts hidden (no
+     point animating what nobody is watching), written by the rAF ramp on its last frame, and
+     written unconditionally by a timeout that outlives the ramp in case rAF never gets there.
+     setTimeout is throttled in background tabs too, but it is clamped to ~1s rather than stalled,
+     so it still fires — and `done` makes all three paths idempotent. */
+  function countUp(el, to, prefix, suffix){
+    if(!el) return;
+    var sfx = suffix ? '<small>'+suffix+'</small>' : '', done=false;
+    function finalize(){ done=true; el.innerHTML=prefix+to.toLocaleString()+sfx; }
+    if(QUICK || document.hidden){ finalize(); return; }
+    var t0=null, dur=1100;
+    requestAnimationFrame(function step(ts){
+      if(done) return;
+      if(t0==null) t0=ts;
+      var p=Math.min((ts-t0)/dur,1), e=1-Math.pow(1-p,3);          // easeOutCubic
+      if(p>=1){ finalize(); return; }
+      el.innerHTML=prefix+Math.round(to*e).toLocaleString()+sfx;
+      requestAnimationFrame(step);
+    });
+    setTimeout(function(){ if(!done) finalize(); }, dur+250);
+    // and if the tab is revealed mid-ramp, don't leave it mid-ramp
+    document.addEventListener('visibilitychange', function onVis(){
+      if(document.hidden) return;
+      document.removeEventListener('visibilitychange', onVis);
+      if(!done) finalize();
+    });
+  }
+
+  /* ══════════════════ 2 · 2nd + 3rd priority ══════════════════ */
+  function renderNext(){
+    var w=$('#nextWrap');
+    if(priorities.length<2){ w.innerHTML=''; return; }
+    // The row is a DIV, not a button, because it now contains a real <button> (the Ask Cait pill)
+    // and nesting interactive elements is invalid HTML — browsers reparent it and the click target
+    // breaks. The row still behaves like one control: the global [data-ask] delegation uses
+    // closest(), so a click anywhere in the row — pill included — resolves the same question, and
+    // role/tabindex/Enter-Space keep it reachable from the keyboard.
+    /* Two different priorities can map to the same move (e.g. anything unmatched used to
+       land on the safety net), which rendered the identical row twice. Drop repeats,
+       including a repeat of the hero's own move, and renumber what's left. */
+    var seenMove={}; seenMove[moveFor(priorities[0].label).topic]=1;
+    var rowMoves=[];
+    priorities.slice(1).forEach(function(p){
+      var m=moveFor(p.label);
+      if(seenMove[m.topic]) return;
+      seenMove[m.topic]=1;
+      rowMoves.push(m);
+    });
+    w.innerHTML = rowMoves.map(function(m,i){
+      return '<div class="nm-row" role="button" tabindex="0" data-ask="'+esc(m.ask)+'"><span class="nm-num">'+(i+2)+'</span>'
+        + '<div class="min-w-0"><div class="nm-title">'+m.title+'</div><div class="nm-sub"><b>'+m.num+'</b> · '+m.sub+'</div></div>'
+        + '<button class="askcait" tabindex="-1" aria-hidden="true">Ask Cait '+caitMark(16,'m-ac'+i)+'</button></div>';
+    }).join('');
+    icons();
+  }
+
+  /* ══════════════════ 3 · personalize your workspace ══════════════════ */
+  var WS=[
+    {icon:'building-2', tone:'blue',   title:'Connect your bank',       desc:'Unlock spending insights and cash flow.',              time:'2 min',  ask:'Connect my bank account.'},
+    {icon:'trending-up',tone:'mint',   title:'Estimate your retirement',desc:'See how your 401(k) match impacts your future.',       time:'1 min',  ask:'Estimate my retirement.'},
+    {icon:'calendar',   tone:'violet', title:'Add a life event',        desc:'Help Cait tailor advice to your upcoming milestones.', time:'30 sec', ask:'Add a life event.'},
+    {icon:'award',      tone:'amber',  title:'Explore your benefits',   desc:'Understand all the programs Acme offers you.',         time:'1 min',  ask:'Explore my Acme benefits.'}
+  ];
+  function renderWorkspace(){
+    $('#wsGrid').innerHTML=WS.map(function(s){
+      // The .ws-ic tone badge is intentionally not rendered — Sheetal asked for the icons off this
+      // section for now. `icon` and `tone` are deliberately LEFT in the WS[] data above rather than
+      // deleted, so restoring the badge is re-adding this one line, not reconstructing four icon
+      // and colour choices.
+      return '<button class="wscard" data-ask="'+esc(s.ask)+'">'
+        + '<div class="ws-title">'+s.title+'</div>'
+        + '<div class="ws-desc">'+s.desc+'</div>'
+        + '<div class="ws-foot"><span class="ws-time"><i data-lucide="clock" class="w-3 h-3"></i> '+s.time+'</span>'
+        + '<span class="ws-chev"><i data-lucide="chevron-right" class="w-3.5 h-3.5"></i></span></div>'
+        + '</button>';
+    }).join(''); icons();
+  }
+
+  /* ══════════════════ 4 · Your Spaces — the Candidly launcher ══════════════════
+     Labels and icons match the nav shell's Tools group. The buttons are deliberately inert: the
+     Candidly widget is not in this repo (it lives on explore/candidly-widget-integration), so
+     wiring them to a URL here would ship a dead link. The toast says so plainly rather than
+     failing silently. Point SPACES[].href at the widget once it lands and drop the toast branch. */
+  var SPACES=[
+    {icon:'percent',        label:'Student debt',     href:null},
+    {icon:'graduation-cap', label:'College planning', href:null}
+  ];
+  function renderSpaces(){
+    $('#spacesCard').innerHTML =
+      '<div class="spaces-head">'
+      + '<div style="font-size:14px;font-weight:600;color:#000000">Candidly tools</div>'
+      + '<span class="spaces-note">Opens in this tab, like everything else</span>'
+      + '</div>'
+      + '<p class="spaces-lede">Your Candidly workspaces sit alongside Cait, with your Acme benefits already applied. Cait can pull anything from them into a conversation.</p>'
+      + '<div class="spaces-row">'
+      + SPACES.map(function(s,i){ return '<button class="btn-tertiary" data-space="'+i+'"><i data-lucide="'+s.icon+'"></i> '+s.label+'</button>'; }).join('')
+      + '</div>';
+    icons();
+  }
+  var toastT=null;
+  function toast(msg){
+    var t=$('#toast'); if(!t) return;
+    t.textContent=msg; t.classList.add('show');
+    clearTimeout(toastT); toastT=setTimeout(function(){ t.classList.remove('show'); }, 2600);
+  }
+  document.addEventListener('click', function(e){
+    var b=e.target.closest('[data-space]'); if(!b) return;
+    var s=SPACES[+b.getAttribute('data-space')];
+    if(s && s.href){ window.location.href=s.href; return; }
+    toast(s.label+' opens once the Candidly widget is wired up.');
+  });
+
+  /* ══════════════════ chips + greeting ══════════════════ */
+  var CHIPS=["How's my retirement?",'Can I afford a home?','Find me savings','Am I on track?'];
+  $('#homeChips').innerHTML=CHIPS.map(function(c){ return '<button class="homechip" data-ask="'+esc(c)+'">'+c+'</button>'; }).join('');
+  (function(){
+    var d=new Date(), days=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+    var h=d.getHours(), mins=d.getMinutes(), hr=h%12||12, ap=h<12?'am':'pm';
+    $('#dateLine').textContent=days[d.getDay()]+' · '+hr+':'+(mins<10?'0':'')+mins+ap;
+  })();
+
+  /* ══════════════════ sidebar ══════════════════ */
+  /* Two things can collapse the sidebar: the user, and a narrow viewport. They are tracked
+     separately — `manualRail` is the user's choice, and it must survive a trip through a narrow
+     width. Reading the current data-rail as the toggle's source of truth (the first version's
+     approach) conflated the two, so resizing back to desktop stranded the sidebar collapsed with
+     no way to reopen it, because the toggle is hidden below 900px. */
+  var manualRail=false;
+  function syncRail(){
+    $('#device').setAttribute('data-rail', manualRail?'1':'0');
+    var b=$('#railToggle');
+    if(b){
+      b.setAttribute('aria-label', manualRail?'Expand sidebar':'Collapse sidebar');
+      b.innerHTML='<i data-lucide="'+(manualRail?'panel-left-open':'panel-left-close')+'" class="w-4 h-4"></i>';
+    }
+    icons();
+  }
+  $('#railToggle').addEventListener('click', function(){ manualRail=!manualRail; syncRail(); });
+  $('#navHome').addEventListener('click', function(){ go('home'); });
+  /* No viewport listener. The narrow rail is a media query (see the max-width:899px block), so
+     there is nothing here that a missed resize/change event could desynchronise. `manualRail`
+     survives a trip through a narrow width untouched, which is why the sidebar returns to the
+     user's own choice — not a forced default — when the window widens again. */
+  syncRail();
+
+  /* ══════════════════ scene router ══════════════════ */
+  var mode='text';
+  function go(id){
+    $$('.scene').forEach(function(s){ s.classList.remove('on'); });
+    var el=$('#scene-'+id); el.classList.add('on'); el.scrollTop=0;
+    syncNav(id);
+    icons();
+    if(id==='listen') runListen();
+  }
+  /* The sidebar is permanent now, so it has to say where you are — it previously never updated
+     because it was destroyed on every scene change. Leaving Home lit while sitting in a
+     conversation was the visible symptom. `chat` marks New chat rather than nothing, because that
+     is the entry that led there; `listen` marks neither, since it covers the shell entirely. */
+  function syncNav(id){
+    var home=$('#navHome'), nc=$('#navNewChat');
+    if(!home||!nc) return;
+    home.classList.toggle('on', id==='home');
+    nc.classList.toggle('on', id==='askcait'||id==='chat');
+  }
+
+  /* ══════════════════ Ask Cait landing ══════════════════ */
+  var AC_CHIPS=[
+    {chip:'Where should I focus first?',    say:'Where should I focus first?'},
+    {chip:'Help me set my priorities',      say:'Help me figure out my priorities'},
+    {chip:"What's my biggest opportunity?", say:"What's my biggest financial opportunity right now?"},
+    {chip:'Help me see my whole picture',   say:'Help me see my whole financial picture'}
+  ];
+  var AC_REPLIES={
+    'Where should I focus first?':"Good question. From what's already connected, your biggest lever looks like your Acme 401(k) match — there's free money on the table. Want me to walk you through it?",
+    'Help me figure out my priorities':"Let's do it. Tell me a little about what's on your mind — a home, debt, saving, retirement — and I'll help you rank what matters most right now.",
+    "What's my biggest financial opportunity right now?":"From your connected accounts, it's your Acme 401(k) match — you're leaving about $1,880/yr on the table. Want to see how to capture it?",
+    'Help me see my whole financial picture':"Love that — let's zoom out. Your Acme accounts are already connected, so I can pull your cash, debt and retirement into one view and show you where you stand. Want me to start there?"
+  };
+  function acReplyFor(t){ return AC_REPLIES[t] || "Got it — let's dig into that. I'll pull from your connected accounts and come back with the specifics. Anything you'd like me to weigh first?"; }
+  function openAskCaitLanding(){
+    var ch=$('#acChips');
+    if(ch) ch.innerHTML=AC_CHIPS.map(function(c){ return '<button type="button" class="homechip" data-acsay="'+encodeURIComponent(c.say)+'">'+c.chip+'</button>'; }).join('');
+    go('askcait');
+  }
+  function acStart(text){
+    mode='text'; go('chat'); ensureChat();
+    if(thread) thread.innerHTML='';
+    userBubble(text); caitSay(acReplyFor(text));
+  }
+  $('#navNewChat').addEventListener('click', openAskCaitLanding);
+  (function(){
+    var sc=$('#scene-askcait');
+    if(sc) sc.addEventListener('click', function(e){
+      var b=e.target.closest('[data-acsay]'); if(b) acStart(decodeURIComponent(b.getAttribute('data-acsay')));
+    });
+    var s=$('#acSend'), i=$('#acIn');
+    function sub(){ var v=(i.value||'').trim(); if(!v) return; i.value=''; if(s) s.classList.remove('on'); acStart(v); }
+    if(s) s.addEventListener('click', sub);
+    if(i){ i.addEventListener('keydown', function(e){ if(e.key==='Enter') sub(); });
+           i.addEventListener('input', function(){ if(s) s.classList.toggle('on', !!i.value.trim()); }); }
+    var m=$('#acMic'); if(m) m.addEventListener('click', startVoice);
+  })();
+
+  /* ══════════════════ chat engine ══════════════════ */
+  var thread=$('#thread'), chatScroll=$('#chatScroll'), chatFooter=$('#chatFooter'), chatMounted=false;
+  function scrollDown(){ chatScroll.scrollTop=chatScroll.scrollHeight; }
+  function userBubble(text){ var m=document.createElement('div'); m.className='msg me'; m.innerHTML='<div class="bub me">'+text+'</div>'; thread.appendChild(m); scrollDown(); }
+  function caitRow(){ var m=document.createElement('div'); m.className='msg'; m.innerHTML='<span class="avat">'+caitMark(26,'m-'+Math.random().toString(36).slice(2,7))+'</span><div class="bub cait"></div>'; thread.appendChild(m); scrollDown(); return $('.bub',m); }
+  async function caitSay(text){ var b=caitRow(); b.innerHTML='<span class="thinking"><i></i><i></i><i></i></span>'; scrollDown(); await sleep(900); b.innerHTML='<span></span>'; await typeInto($('span',b), text, 46); scrollDown(); return b; }
+  /* GAP #1 · the chat router below is stateless: ask about the same topic twice and it
+     replayed the identical answer, which read as broken. Nothing is "one exchange deep"
+     by design — it simply had no memory of what it had already said. sayOnce() keeps that
+     memory and swaps a repeat for a boundary line in Cait's voice. Not a pop-up: pop-ups
+     read as errors. */
+  var chatSaid={};
+  function sayOnce(text){
+    if(chatSaid[text]) return caitSay("That's as far as I can take this in the preview — in the full version, I'd walk you through it step by step.");
+    chatSaid[text]=1;
+    return caitSay(text);
+  }
+  function caitReply(msg){
+    var t=(msg||'').toLowerCase();
+    if(/walk|plan|focus|track|overview|start with|priorit/.test(t))
+      return sayOnce("Here's my plan for you, in order: 1) raise your Acme 401(k) to the full 5% match — about $1,880/yr in free money, 2) start your down-payment autosave, 3) point your $100/mo Acme perk at your highest-rate card. I'll set them up one at a time — want me to start with the 401(k)?");
+    if(/math|how did you|why this|behind this/.test(t)) return sayOnce("Happy to show you. I sized it from your Acme plan documents and the estimate you gave me — match rate, your current contribution, and your take-home. Want me to break out each line?");
+    if(/retire|401|match|benefit/.test(t)) return sayOnce("Here's exactly how I'll do it: raise your Acme 401(k) to the full 5% match — that's ~$1,880/yr you're leaving on the table — in two taps on your benefits portal, with your take-home barely moving. Want me to start the change now?");
+    if(/home|house|down|afford|place/.test(t)) return sayOnce("Here's how I'll do it: open a down-payment autosave at ~$420/mo, route it to a high-yield account so it grows, and pull in the Acme perks that get you to 2028 sooner. Want me to set it up?");
+    if(/debt|loan|card/.test(t)) return sayOnce("Here's my plan: send your $100/mo Acme perk straight at your highest-rate card, leave your other goals untouched, and it clears about 7 months sooner. Want me to line it up?");
+    if(/educat|school|tuition|529/.test(t)) return sayOnce("Here's how I'll do it: open a 529 and route your Acme education benefit into it (covers ~40%), then set a small monthly add so it grows tax-free. Want me to set it up?");
+    if(/save|saving|emergency|safety|cushion/.test(t)) return sayOnce("Here's how I'll do it: set a small auto-transfer each payday and ramp it gently — that takes you from 1 month to a 3-month cushion without touching your other goals. Want me to set it up?");
+    if(/invest/.test(t)) return sayOnce("Here's how I'll do it: once your safety net's set, I'll start you at ~$300/mo into a simple diversified mix, paced so it never feels risky — roughly $48k over ten years. Want me to start small?");
+    if(/spend|budget|cash|fee|cut/.test(t)) return sayOnce("Here's how I'll do it: connect your bank, scan the ~$340/mo in subscriptions and fees I flagged, and tee up the ones safe to cut so you can cancel in a tap. Want me to start the audit?");
+    if(/memory|know about/.test(t)) return sayOnce("I remember your priorities, your employer (Acme), and the estimates you shared — so you never repeat yourself. Want to peek or edit it?");
+    if(/personalize|personalise/.test(t)) return sayOnce("There are six: connect your bank, estimate your retirement, add a life event, explore your Acme benefits, set a savings target, and pick how you like to see value. Want to start with the bank connection?");
+    return sayOnce("On it — I'll handle the setup. Want me to start with your highest-leverage move, the Acme 401(k) match?");
+  }
+  function mountChatComposer(){
+    chatFooter.innerHTML='<div class="chatcol"><div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-bottom:10px" id="chatChips"></div>'
+      + '<div class="composer" style="display:flex;align-items:center;gap:4px;padding:6px 8px 6px 20px">'
+      + '<input id="chatIn" class="flex-1 min-w-0 bg-transparent text-[15px] text-ink outline-none placeholder:text-muted py-2" placeholder="Ask Cait anything" />'
+      + '<button id="chatMic" class="cmic" aria-label="Talk"><i data-lucide="mic"></i></button>'
+      + '<button id="chatSend" class="csend" aria-label="Send"><i data-lucide="arrow-up"></i></button>'
+      + '</div></div>';
+    $('#chatChips').innerHTML=CHIPS.map(function(c){ return '<button class="homechip" data-ask="'+esc(c)+'">'+c+'</button>'; }).join('');
+    icons();
+    $('#chatSend').addEventListener('click', chatSubmit);
+    $('#chatMic').addEventListener('click', startVoice);
+    $('#chatIn').addEventListener('keydown', function(e){ if(e.key==='Enter') chatSubmit(); });
+    $('#chatIn').addEventListener('input', function(){ var s=$('#chatSend'); if(s) s.classList.toggle('on', !!this.value.trim()); });
+  }
+  function chatSubmit(){ var inp=$('#chatIn'); var v=(inp.value||'').trim(); if(!v) return; inp.value=''; $('#chatSend').classList.remove('on'); mode='text'; userBubble(v); caitReply(v); }
+  function ensureChat(){ if(!chatMounted){ mountChatComposer(); chatMounted=true; } }
+  function openChatWith(msg){ mode='text'; go('chat'); ensureChat(); userBubble(msg); caitReply(msg); }
+  // no #chatBack any more — the sidebar's Home item is the way back (see the shell note in the
+  // markup). Wiring a removed element would throw on load.
+
+  /* ══════════════════ voice capture ══════════════════ */
+  var VOICE_SAY="Can you walk me through my plan — am I on track for the home, and what should I focus on first?";
+  var listenPhrase=VOICE_SAY, listenReturn='new';
+  function setVState(s){ var sc=$('#scene-listen'); if(sc) sc.setAttribute('data-vstate', s); var lbl=$('#listenState'); if(lbl) lbl.textContent = s==='thinking' ? 'Cait’s got it…' : 'Cait is listening…'; }
+  function revealWords(inner, text){
+    return new Promise(function(resolve){
+      inner.innerHTML=''; var tscript=inner.parentElement;
+      function reposition(){ inner.style.transform='translateY('+(tscript.clientHeight - inner.offsetHeight)+'px)'; }
+      var words=text.split(/\s+/), spans=[], i=0, HOT=4;
+      if(QUICK){ inner.innerHTML=words.map(function(w){return '<span class="word in">'+w+'</span>';}).join(''); reposition(); resolve(); return; }
+      reposition();
+      (function next(){
+        if(i>=words.length){ setTimeout(function(){ spans.forEach(function(s){ s.classList.remove('hot'); }); resolve(); }, 420); return; }
+        var w=words[i], s=document.createElement('span'); s.className='word'; s.textContent=w;
+        inner.appendChild(s); spans.push(s); reposition();
+        void s.offsetWidth; s.classList.add('in','hot');
+        for(var k=0;k<spans.length-HOT;k++) spans[k].classList.remove('hot');
+        if(i/words.length > 0.42) $('#scene-listen').classList.add('vwarm');
+        i++;
+        setTimeout(next, 108 + (/[.,…]$/.test(w)?140:0) + (w.length>7?32:0));
+      })();
+    });
+  }
+  async function runListen(){
+    var sc=$('#scene-listen'); sc.classList.remove('vwarm'); setVState('listening');
+    await sleep(700);
+    await revealWords($('#tsInner'), listenPhrase);
+    if(QUICK) toChatFromVoice();
+  }
+  function toChatFromVoice(){ mode='voice'; go('chat'); ensureChat(); userBubble(VOICE_SAY); caitReply(VOICE_SAY); }
+  $('#listenDone').addEventListener('click', function(){ if(QUICK){ toChatFromVoice(); return; } setVState('thinking'); setTimeout(toChatFromVoice, 620); });
+  $('#listenExit').addEventListener('click', function(){ go('home'); });
+  $('#listenText').addEventListener('click', function(){ go('home'); setTimeout(function(){ var i=$('#homeInput'); if(i) i.focus(); }, 120); });
+  function startVoice(){ mode='voice'; listenPhrase=VOICE_SAY; listenReturn='new'; go('listen'); }
+
+  /* ══════════════════ home composer + delegated asks ══════════════════ */
+  function homeSubmit(){ var inp=$('#homeInput'); var v=(inp.value||'').trim(); if(!v) return; inp.value=''; $('#homeSend').classList.remove('on'); openChatWith(v); }
+  $('#homeSend').addEventListener('click', homeSubmit);
+  $('#homeInput').addEventListener('keydown', function(e){ if(e.key==='Enter') homeSubmit(); });
+  $('#homeInput').addEventListener('input', function(){ var s=$('#homeSend'); if(s) s.classList.toggle('on', !!this.value.trim()); });
+  $('#homeMic').addEventListener('click', startVoice);
+
+  // one delegation for every data-ask surface: hero, ranked rows, workspace cards, chips, sidebar
+  document.addEventListener('click', function(e){
+    var b=e.target.closest('[data-ask]'); if(!b) return;
+    var q=b.getAttribute('data-ask'); if(!q) return;
+    openChatWith(q);
+  });
+  // the ranked rows are divs (see renderNext), so Enter/Space have to be wired by hand — a real
+  // <button> would give them for free, but it can't contain the Ask Cait button.
+  document.addEventListener('keydown', function(e){
+    if(e.key!=='Enter' && e.key!==' ') return;
+    var r=e.target.closest('.nm-row[data-ask]'); if(!r) return;
+    e.preventDefault();
+    openChatWith(r.getAttribute('data-ask'));
+  });
+
+  /* ── init ── */
+  renderHero(); renderNext(); renderWorkspace(); renderSpaces(); icons();
+})();
+</script>
+</body>
+</html>
