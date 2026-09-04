@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Cait user testing — links</title>
+<style>
+  :root{ --ink:#1c1b19; --soft:#565249; --line:#e3e0d9; --bg:#faf9f7; --card:#fff; --blue:#265DDC; }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+    line-height:1.5;display:flex;justify-content:center;padding:48px 24px 80px}
+  main{width:100%;max-width:660px}
+  h1{font-size:26px;margin:0 0 6px;letter-spacing:-.02em}
+  .sub{color:var(--soft);font-size:14.5px;margin:0 0 32px}
+  h2{font-size:12px;text-transform:uppercase;letter-spacing:.09em;color:var(--soft);
+    margin:34px 0 12px;font-weight:600}
+  a.row{display:block;background:var(--card);border:1px solid var(--line);border-radius:12px;
+    padding:16px 18px;margin-bottom:10px;text-decoration:none;color:inherit}
+  a.row:hover{border-color:#c9c5bb}
+  .row .t{font-size:16px;font-weight:600;margin-bottom:3px}
+  .row .d{font-size:13.5px;color:var(--soft)}
+  .row .u{font-size:12px;color:var(--blue);margin-top:6px;word-break:break-all}
+  .start{border-color:var(--blue);border-width:2px}
+  .note{background:#fff;border:1px solid var(--line);border-radius:12px;padding:16px 18px;
+    font-size:13.5px;color:var(--soft);margin-top:26px}
+  .note b{color:var(--ink)}
+  ol{margin:8px 0 0;padding-left:20px}
+  li{margin-bottom:5px}
+</style>
+</head>
+<body>
+<main>
+  <h1>Cait user testing — links</h1>
+  <p class="sub">Everything for a session, in the order you use it.</p>
+
+  <h2>Start a session here</h2>
+  <a class="row start" href="https://session-briefing.vercel.app" target="_blank">
+    <div class="t">1 · Tester briefing screen</div>
+    <div class="d">What the tester reads out loud, then hits Start. Paste this link in Zoom chat.</div>
+    <div class="u">session-briefing.vercel.app</div>
+  </a>
+  <a class="row" href="https://cait-2-0-onboarding.vercel.app" target="_blank">
+    <div class="t">2 · The email they get</div>
+    <div class="d">Mock Acme inbox with the Candidly email — now the prototype's front door. "Get started" goes into onboarding.</div>
+    <div class="u">cait-2-0-onboarding.vercel.app</div>
+  </a>
+  <a class="row" href="https://cait-2-0-onboarding.vercel.app/onboarding.html" target="_blank">
+    <div class="t">3 · Onboarding</div>
+    <div class="d">Talk or tap → priorities → estimates. Open directly only for prep.</div>
+    <div class="u">cait-2-0-onboarding.vercel.app/onboarding.html</div>
+  </a>
+  <a class="row" href="https://cait-2-0-onboarding.vercel.app/home-desktop.html" target="_blank">
+    <div class="t">4 · The workspace</div>
+    <div class="d">Where the flow lands — plan, home, chat.</div>
+    <div class="u">cait-2-0-onboarding.vercel.app/home-desktop.html</div>
+  </a>
+
+  <h2>Your notes and results</h2>
+  <a class="row" href="https://app.notion.com/p/3cc127c682c481f68d43ecafc32aeb8a" target="_blank">
+    <div class="t">Notion — Cait User Testing Hub</div>
+    <div class="d">Session script, testing kit, gap log, prototype notes.</div>
+  </a>
+  <a class="row" href="https://claude.ai/code/artifact/938c2a9e-7b71-4a1f-8444-e0a98ef51ebf" target="_blank">
+    <div class="t">Session scoreboard</div>
+    <div class="d">Log each session; results compute themselves.</div>
+  </a>
+
+  <h2>Sheetal's original build</h2>
+  <a class="row" href="https://cait-dash.vercel.app/onboarding-v10c-desktop.html" target="_blank">
+    <div class="t">cait-dash — not for sessions</div>
+    <div class="d">The build your instance was copied from. Still has the old test-account name in it.</div>
+    <div class="u">cait-dash.vercel.app/onboarding-v10c-desktop.html</div>
+  </a>
+
+  <div class="note">
+    <b>Reset between sessions:</b> reload the briefing screen. Nothing is stored.
+    <br><br>
+    <b>Before session one:</b>
+    <ol>
+      <li>Repoint the briefing screen's Start button at your build — it still goes to Sheetal's.</li>
+      <li>Check the icons render on the onboarding screen.</li>
+      <li>The prototype needs internet — the styling and icons load from a CDN.</li>
+    </ol>
+  </div>
+</main>
+</body>
+</html>
