@@ -1379,6 +1379,12 @@ function renderLog(){
 function focusTab(uid, why){
   const t = TABS().find(x => x.uid === uid);
   if(!t) return;
+  /* The two fixed tabs are seeded on arrival, so a tester can reach their skeleton canvas
+     by clicking the tab strip directly, without ever going through the sidebar's openNav
+     guard. Same rule as there: Home leaves for the real workspace, Ask Cait — greybox,
+     same as everything else this shell/Memory can open — goes nowhere. */
+  if(t.kind === 'home'){ window.location.href = 'home-desktop.html'; return; }
+  if(t.fixed && t.kind === 'chat') return;
   if(t.hidden){ t.hidden = false; logRule('Recalled from overflow', '“'+t.label+'” returns with its state intact — overflow hides, it never closes.', 'block'); }
   C().activeUid = uid;
   t.lastFocus = ++SEQ;
@@ -1439,34 +1445,16 @@ function openNav(navId, opts){
     return;
   }
 
-  /* New chat is a destination like the rest: the Ask Cait landing. */
-  /* The sidebar's New chat is the conversation path. The category + sets S.askFor first and
-     routes through here, so the two entry points share one screen and one code path. */
-  /* Three ways onto one screen, and they are not the same screen. The sidebar's New chat is
-     the product's front door — greeting, wordmark, goal deck. A category `+` is creation in
-     context: the same composer with the question reframed and none of the front-door
-     furniture, because the user already said what they were making. */
-  if(item.kind === 'newchat' && !opts.fromCategory) S.askFor = 'landing';
-  const dest = item.kind === 'newchat'
-    ? {navId:'ask', label:'Ask Cait', icon:'sparkle', kind:'chat'}
-    : {navId, label:item.label, icon:item.icon, kind:item.kind};
-  /* A widget destination carries which product it embeds, so the canvas knows which nav to
-     draw. Everything else clears it. */
-  dest.family = item.kind === 'tools' ? (item.admin ? 'admin' : 'employee') : null;
-
-  const existing = TABS().find(t => t.navId === dest.navId);
-  if(existing){
-    focusTab(existing.uid, {rule:'Already open — focused',
-      detail:'“'+existing.label+'” is open in another tab, so nothing was added. Nothing is ever open twice.'});
+  /* Memory is the shell's other real, fully-built destination — same rule as Home. */
+  if(item.kind === 'memory'){
+    window.location.href = 'cait-memory.html';
     return;
   }
 
-  const nt = {uid:'tb-'+(++UID), ...dest, lastFocus:++SEQ, hidden:false, loaded:true};
-  TABS().push(nt); C().activeUid = nt.uid;
-  logRule('Opened in a tab',
-    '“'+dest.label+'” opened as its own tab. Nothing was replaced, so whatever you were reading is still there to come back to'
-    + (TABS().length > MAX_VISIBLE_TABS ? ' — and past '+MAX_VISIBLE_TABS+' visible tabs the least recently used one steps into +n rather than closing.' : '.'));
-  syncRail(); render();
+  /* Everything else this sidebar can open renders as a grey skeleton canvas (that is the
+     whole point of this file — see the fidelity contract at the top). A skeleton reads as
+     BROKEN to a tester, where a row that just doesn't respond reads as unbuilt, so every
+     remaining destination is inert during test sessions rather than opening its tab. */
 }
 
 /* Overflow: least recently focused kept tab steps aside. Never the focused

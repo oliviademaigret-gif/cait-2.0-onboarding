@@ -3475,6 +3475,12 @@ function focusTab(uid, why){
   if(prev && prev.kind === 'chat' && prev.uid !== uid) S.lastChat = {uid:prev.uid, label:prev.label};
   const t = TABS().find(x => x.uid === uid);
   if(!t) return;
+  /* The two fixed tabs are seeded on arrival, so a tester can reach their skeleton canvas
+     by clicking the tab strip directly, without ever going through the sidebar's openNav
+     guard. Same rule as there: Home leaves for the real workspace, New chat — greybox,
+     same as everything else this page's shared shell chrome can open — goes nowhere. */
+  if(t.kind === 'home'){ window.location.href = 'home-desktop.html'; return; }
+  if(t.fixed && t.kind === 'chat') return;
   if(t.hidden){ t.hidden = false; logRule('Recalled from overflow', '“'+t.label+'” returns with its state intact — overflow hides, it never closes.', 'block'); }
   C().activeUid = uid;
   t.lastFocus = ++SEQ;
@@ -3535,21 +3541,15 @@ function openNav(navId, opts){
     return;
   }
 
-  /* New chat is a destination like the rest: the Ask Cait landing. */
-  /* The sidebar's New chat is the conversation path. The category + sets S.askFor first and
-     routes through here, so the two entry points share one screen and one code path. */
-  /* Three ways onto one screen, and they are not the same screen. The sidebar's New chat is
-     the product's front door — greeting, wordmark, goal deck. A category `+` is creation in
-     context: the same composer with the question reframed and none of the front-door
-     furniture, because the user already said what they were making. */
-  if(item.kind === 'newchat' && !opts.fromCategory) S.askFor = 'landing';
-  const dest = item.kind === 'newchat'
-    ? {navId:'ask', label:'New chat', icon:'newchat', kind:'chat'}
-    : {navId, label:item.label, icon:item.icon, kind:item.kind};
-  /* A widget destination carries which product it embeds, so the canvas knows which nav to
-     draw. Everything else clears it. */
-  dest.family = item.kind === 'tools' ? (item.admin ? 'admin' : 'employee') : null;
+  /* Memory is the one destination this page renders for real — the boot script below opens
+     it in-page on arrival, and reopening it (or refocusing it) needs the ordinary tab logic.
+     Everything else this sidebar can open renders as a grey skeleton canvas instead (see
+     cait-shell.html's fidelity contract, which this file's chrome shares). A skeleton reads
+     as BROKEN to a tester, where a row that just doesn't respond reads as unbuilt, so every
+     other destination is inert during test sessions rather than opening its tab. */
+  if(item.kind !== 'memory') return;
 
+  const dest = {navId, label:item.label, icon:item.icon, kind:item.kind};
   const existing = TABS().find(t => t.navId === dest.navId);
   if(existing){
     focusTab(existing.uid, {rule:'Already open — focused',

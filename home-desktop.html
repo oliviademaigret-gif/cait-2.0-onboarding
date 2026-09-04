@@ -394,15 +394,21 @@
           <a class="nav-item" href="cait-memory.html" style="text-decoration:none"><i data-lucide="book-open" class="w-[18px] h-[18px]"></i><span class="sb-label">Memory</span><span class="navtip">Memory</span></a>
           <!-- First run: no saved Dashboards or Conversations yet. Those groups appear as Cait
                creates them, so an empty-but-present section would be a promise, not a state. -->
+          <!-- Rows marked data-inert are visible but go nowhere on purpose. Sheetal's shell is a
+               NAVIGATION prototype: the sidebar is high fidelity, every content area is drawn as
+               grey placeholder bars so reviewers argue about the IA and not the copy. Correct for
+               design review, wrong for a tester — a grey page reads as broken, where a row that
+               doesn't respond only reads as unbuilt (and the moderator has a line for that).
+               Memory is the exception: it is fully built, so it stays a real destination. -->
           <!-- Spaces is different: it is PROVIDED, not created, so it exists on a first run.
                This is what makes the wider Candidly platform visible from inside Cait — the
                thing Michael asked to test. Group and item names lifted from the shell's navFor
                (one widget entry for launch: Student debt). -->
           <div class="sb-sec sb-label">Spaces</div>
-          <a class="nav-item" href="cait-shell.html?open=sp-debt" style="text-decoration:none"><i data-lucide="percent" class="w-[18px] h-[18px]"></i><span class="sb-label">Student debt</span><span class="navtip">Student debt</span></a>
+          <button class="nav-item" data-inert><i data-lucide="percent" class="w-[18px] h-[18px]"></i><span class="sb-label">Student debt</span><span class="navtip">Student debt</span></button>
         </div>
         <div class="sb-foot">
-          <a class="nav-item" href="cait-shell.html" style="text-decoration:none"><i data-lucide="settings" class="w-[18px] h-[18px]"></i><span class="sb-label">Settings</span><span class="navtip">Settings</span></a>
+          <button class="nav-item" data-inert><i data-lucide="settings" class="w-[18px] h-[18px]"></i><span class="sb-label">Settings</span><span class="navtip">Settings</span></button>
           <button class="nav-item" data-ask="Manage my connected accounts."><i data-lucide="landmark" class="w-[18px] h-[18px]"></i><span class="sb-label">Connected accounts</span><span class="nav-badge sb-label" style="display:inline-flex;align-items:center;gap:6px">6 <span style="width:6px;height:6px;border-radius:9999px;background:#F59F1D;display:inline-block"></span></span><span class="navtip">Connected accounts</span></button>
           <div class="nav-item" style="cursor:default"><span class="avatarJ"><i data-lucide="user" class="w-[15px] h-[15px]"></i></span><span class="sb-label" style="min-width:0"><span style="display:block;font-size:13.5px;font-weight:600;color:#000000;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">My account</span><span style="display:block;font-size:11.5px;color:#676D7A;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Acme Corp</span></span></div>
         </div>
