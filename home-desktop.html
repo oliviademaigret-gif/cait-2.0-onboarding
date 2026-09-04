@@ -27,11 +27,15 @@
     borderRadius: { lg:'12px', xl:'16px', '2xl':'24px', '3xl':'28px' },
     colors: {
       paper:'#FAFBFC', surface:'#FFFFFF', ink:'#000000', subink:'#2A2F3D', muted:'#676D7A',
-      line:'#E2E4EB', line2:'#F0F2F5', chip:'#F0F2F5',
-      primary:{ DEFAULT:'#265DDC', foreground:'#FFFFFF' },
-      secondary:{ DEFAULT:'#EFF4FF', foreground:'#265DDC' },
-      success:{ DEFAULT:'#16B76C', foreground:'#027A42', subtle:'#E6FAEE' },
-      sky:'#31ADF5', lilac:'#B380BC', border:'#E2E4EB',
+      line:'#E2E4EB', line2:'#EEF0F4', chip:'#F0F2F5', sunken:'#F0F2F5',
+      primary:{ DEFAULT:'#265DDC', foreground:'#FFFFFF', hover:'#1F4EBC' },
+      secondary:{ DEFAULT:'#EFF4FF', foreground:'#265DDC', hover:'#E2EBFF' },
+      success:{ DEFAULT:'#16B76C', foreground:'#027A42', subtle:'#E6FAEE', border:'#A6F4C5' },
+      warning:{ DEFAULT:'#F59F1D', foreground:'#B85A08', subtle:'#FFF8EB', border:'#FED684' },
+      danger:{ DEFAULT:'#F54556', foreground:'#B81626', subtle:'#FEEFF1', border:'#FECCD1' },
+      info:{ DEFAULT:'#31ADF5', foreground:'#0D6CA2', subtle:'#EBF8FF', border:'#AEE1FF' },
+      sky:'#31ADF5', lilac:'#B380BC', rose:'#B380BC',
+      'border-strong':'#8F95A3', border:'#E2E4EB',
     },
   }}};
 </script>
@@ -387,11 +391,18 @@
         <div class="sb-body no-scrollbar">
           <button class="nav-item" id="navNewChat"><i data-lucide="message-square-plus" class="w-[18px] h-[18px]"></i><span class="sb-label">New chat</span><span class="navtip">New chat</span></button>
           <button class="nav-item on" id="navHome"><i data-lucide="home" class="w-[18px] h-[18px]"></i><span class="sb-label">Home</span><span class="navtip">Home</span></button>
-          <button class="nav-item" data-ask="Show me my memory — what does Cait know about me?"><i data-lucide="book-open" class="w-[18px] h-[18px]"></i><span class="sb-label">Memory</span><span class="navtip">Memory</span></button>
+          <a class="nav-item" href="cait-memory.html" style="text-decoration:none"><i data-lucide="book-open" class="w-[18px] h-[18px]"></i><span class="sb-label">Memory</span><span class="navtip">Memory</span></a>
           <!-- First run: no saved Dashboards or Conversations yet. Those groups appear as Cait
                creates them, so an empty-but-present section would be a promise, not a state. -->
+          <!-- Spaces is different: it is PROVIDED, not created, so it exists on a first run.
+               This is what makes the wider Candidly platform visible from inside Cait — the
+               thing Michael asked to test. Group and item names lifted from the shell's navFor
+               (one widget entry for launch: Student debt). -->
+          <div class="sb-sec sb-label">Spaces</div>
+          <a class="nav-item" href="cait-shell.html?open=sp-debt" style="text-decoration:none"><i data-lucide="percent" class="w-[18px] h-[18px]"></i><span class="sb-label">Student debt</span><span class="navtip">Student debt</span></a>
         </div>
         <div class="sb-foot">
+          <a class="nav-item" href="cait-shell.html" style="text-decoration:none"><i data-lucide="settings" class="w-[18px] h-[18px]"></i><span class="sb-label">Settings</span><span class="navtip">Settings</span></a>
           <button class="nav-item" data-ask="Manage my connected accounts."><i data-lucide="landmark" class="w-[18px] h-[18px]"></i><span class="sb-label">Connected accounts</span><span class="nav-badge sb-label" style="display:inline-flex;align-items:center;gap:6px">6 <span style="width:6px;height:6px;border-radius:9999px;background:#F59F1D;display:inline-block"></span></span><span class="navtip">Connected accounts</span></button>
           <div class="nav-item" style="cursor:default"><span class="avatarJ"><i data-lucide="user" class="w-[15px] h-[15px]"></i></span><span class="sb-label" style="min-width:0"><span style="display:block;font-size:13.5px;font-weight:600;color:#000000;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">My account</span><span style="display:block;font-size:11.5px;color:#676D7A;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Acme Corp</span></span></div>
         </div>

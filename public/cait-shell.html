@@ -1,0 +1,2997 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>Cait · Navigation shell</title>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<!--
+  cait-shell.html — navigation shell prototype for the signed-in cait.com workspace.
+  Structural review artifact. Self-contained: no build step, no CDN, no network, no localStorage.
+
+  FIDELITY CONTRACT
+    HIGH   — sidebar, tab strip, context chip, overflow control, every state + transition between them.
+    SKELETON — everything inside the content canvas. Grey blocks, dashed regions, no copy, no numbers,
+               no charts. Card titles on Home are real only so reviewers recognise the layout.
+
+  Tokens inherited from home.html (tailwind.config in that file). No new palette, no new typeface.
+  TOKEN GAP notes are inline where a value genuinely did not exist upstream.
+-->
+<style>
+/* ─────────────────────────────────────────────────────────────
+   Tokens — lifted verbatim from home.html's tailwind.config
+   ───────────────────────────────────────────────────────────── */
+:root{
+  --paper:#FAFBFC; --surface:#FFFFFF; --ink:#000000; --subink:#2A2F3D; --muted:#676D7A;
+  --line:#E2E4EB; --line2:#EEF0F4;
+  /* #F0F2F5 — the token set's sunken surface, and the ONE hover for every row on both
+     navigation surfaces. It carried two names (--chip, --hover) for one value, which is the
+     kind of thing a design-system review reads as a tell about the rest.
+     Hover was once three different colours: rgba(--secondary,.55) on plain rows and this on
+     both rows carrying a ⋯ and on the section headers, so a dashboard and Home lit up
+     differently. This wins because it is NEUTRAL — hover never has to be told apart from the
+     SELECTED state, which is the blue one. A control sitting on an already-hovered row takes
+     --line, the next step down, or its own hover is invisible against the row's. */
+  --sunken:#F0F2F5;
+  --primary:#265DDC; --primary-fg:#FFFFFF;
+  --secondary:#EFF4FF; --secondary-fg:#265DDC;
+  --border-strong:#8F95A3;
+  --rose:#B380BC;   /* --warm was a second name for --info (#31ADF5); gone. */
+  --success:#16B76C; --success-fg:#027A42;
+  /* Alert · secondary/base pairs, from Components 468:26190 / 26196 / 26201 / 26207.
+     The subtle backgrounds already matched what this file had; the borders are new. */
+  --success-subtle:#E6FAEE;
+  --info-brd:#AEE1FF; --success-brd:#A6F4C5; --warning-brd:#FED684; --danger-brd:#FECCD1;
+  --warning:#F59F1D; --warning-fg:#B85A08; --warning-subtle:#FFF8EB;
+  --danger:#F54556;  --danger-fg:#B81626;  --danger-subtle:#FEEFF1;
+  --info:#31ADF5;    --info-fg:#0D6CA2;    --info-subtle:#EBF8FF;
+
+  /* The remaining product colours that were still literals in a rule. A white-label re-theme
+     has to be a change to THIS block and nothing else, which is only true if nothing else
+     names a colour. */
+  --primary-hover:#1F4EBC;      /* --primary pressed/hovered */
+  --secondary-hover:#E2EBFF;    /* --secondary pressed/hovered */
+  --scroll-thumb:#D8DAE0;
+  --demo-ink:#0B1220;           /* demo-panel chrome, not product UI */
+  --dot-quiet:#C6D2EC;          /* inert list marker */
+
+  --r-sm:4px; --r-md:8px; --r-lg:12px; --r-xl:16px; --r-2xl:24px;
+  --shadow-pop:0 16px 40px rgba(15,23,42,0.18);
+  --shadow-tip:0 4px 14px rgba(15,23,42,0.25);
+
+  /* Shell metrics — the only genuinely new numbers, and they are layout, not palette. */
+  --sidebar-w:260px;        /* matches home.html aside w-[260px] */
+  --rail-w:52px;            /* spec: ~52px icon rail (home.html rail is 68px — spec wins) */
+  --embed-nav-w:248px;      /* the Candidly platform's own left nav, measured off the product.
+                               Wide because its labels are long ("Federal Repayment Plans"). */
+  --strip-h:44px;           /* matches home.html TabBar h-11 */
+  --tab-min:108px; --tab-max:168px;
+  --demo-w:322px;
+}
+
+*{box-sizing:border-box;}
+html,body{height:100%;margin:0;}
+body{
+  background:var(--paper);
+  /* DM Sans is the product face (home.html). Loaded from the system when present; no webfont
+     request, because this file has to open offline from a Slack download. */
+  font-family:'DM Sans','DM Sans Variable',system-ui,-apple-system,'Segoe UI',sans-serif;
+  color:var(--ink); font-size:14px; -webkit-font-smoothing:antialiased;
+  overflow:hidden;
+}
+button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer;}
+::-webkit-scrollbar{width:6px;height:6px;}
+::-webkit-scrollbar-thumb{background:var(--scroll-thumb);border-radius:8px;}
+::-webkit-scrollbar-track{background:transparent;}
+:focus-visible{outline:2px solid var(--primary);outline-offset:2px;border-radius:var(--r-md);}
+/* Arrow-key navigation moves focus with el.focus(), and whether that paints a ring is left to
+   each browser's :focus-visible heuristic — which is not a thing to bet a keyboard user's
+   ability to see where they are on. Once a key has been pressed, focus in the sidebar is
+   drawn unconditionally; the first pointer event turns it back off, so mouse users never see
+   a ring they did not ask for. */
+body[data-kb="1"] .sidebar :focus{outline:2px solid var(--primary);outline-offset:2px;border-radius:var(--r-md);}
+
+/* ── Root frame ───────────────────────────────────────────── */
+#app{display:flex;height:100%;}
+.shell{flex:1;display:flex;min-width:0;position:relative;}
+
+/* ─────────────────────────────────────────────────────────────
+   SIDEBAR — high fidelity
+   ───────────────────────────────────────────────────────────── */
+.sidebar{
+  width:var(--sidebar-w);flex:0 0 var(--sidebar-w);
+  border-right:1px solid var(--line);background:var(--paper);
+  display:flex;flex-direction:column;position:relative;z-index:30;
+  transition:width .26s cubic-bezier(.4,0,.2,1),flex-basis .26s cubic-bezier(.4,0,.2,1);
+}
+body[data-rail="1"] .sidebar{width:var(--rail-w);flex-basis:var(--rail-w);}
+
+.sb-head{padding:16px 8px 8px;}
+.sb-brand{display:flex;align-items:center;justify-content:space-between;padding-left:4px;}
+.sb-lockup{display:flex;align-items:center;gap:8px;min-width:0;}
+.sb-word{font-weight:700;font-size:20px;line-height:24px;color:var(--ink);}
+.sb-by{font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--muted);margin-top:4px;}
+.sb-collapse{
+  width:32px;height:32px;border-radius:var(--r-md);color:var(--subink);
+  display:flex;align-items:center;justify-content:center;transition:background .15s;flex:0 0 auto;
+}
+.sb-collapse:hover{background:var(--sunken);}
+
+.sb-scroll{flex:1;overflow-y:auto;overflow-x:hidden;padding:0 8px;}
+.sb-foot{border-top:1px solid var(--line);padding:8px;}
+
+/* nav item — geometry from home.html NavItem */
+.nav{
+  width:100%;display:flex;align-items:center;gap:10px;
+  padding:6px 30px 6px 10px;border-radius:var(--r-lg);
+  /* UI label: text-sm / font-medium (14 / 500), per the Candidly type system. */
+  font-size:14px;line-height:20px;font-weight:500;
+  color:var(--subink);transition:background .15s,color .15s;position:relative;text-align:left;
+}
+.nav:hover{background:var(--sunken);color:var(--ink);}
+.nav .ic{color:var(--muted);display:flex;flex:0 0 auto;transition:color .15s;}
+.nav:hover .ic,.nav-wrap:hover > .nav .ic{color:var(--subink);}
+.nav .lbl{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.nav .badge{font-size:12px;color:var(--muted);flex:0 0 auto;}
+/* In the rail there is no room for a word, so the dot carries it alone and the tooltip says
+   the rest. It is the only place the bare colour has to do the work. */
+body[data-rail="1"] .nav .dot.rail-dot{display:block;}
+.nav[aria-current="page"]{background:var(--secondary);color:var(--secondary-fg);}
+.nav[aria-current="page"] .ic,.nav[aria-current="page"]:hover .ic{color:var(--primary);}
+.nav[aria-current="page"]:hover,.nav-wrap:hover > .nav[aria-current="page"]{color:var(--secondary-fg);}
+/* WCAG 1.4.1: the selected row cannot be identified by colour alone. A 3px bar at the row's
+   left edge says it a second way — and because every row box is now the same width, the bars
+   form one column whether the row is a primary destination or a child. */
+.nav[aria-current="page"]::before{
+  content:'';position:absolute;left:0;top:50%;transform:translateY(-50%);
+  width:3px;height:18px;border-radius:0 var(--r-sm) var(--r-sm) 0;background:var(--primary);
+}
+/* open-in-a-tab indicator — same affordance as home.html's sidebar dot */
+/* The open-tab dot is a fixed column at the trailing edge — absolutely positioned, so it
+   lands at the same x on a primary row, a child row and a footer row. In flow it followed the
+   label, which meant rows with a hover control sat 30px further in than rows without one, and
+   the column zig-zagged down the sidebar. The persistent indicator owns the stable position;
+   the transient control moves to accommodate it, never the other way round. */
+.nav .dot{
+  /* --primary at full strength. At 70% it resolved to about #6885E3 over the sidebar —
+     a lighter blue than the brand's, and the only place in the shell drawing one. */
+  width:6px;height:6px;border-radius:99px;background:var(--primary);flex:0 0 auto;
+  position:absolute;right:12px;top:50%;transform:translateY(-50%);
+}
+.nav{position:relative;}
+
+
+.grp{
+  display:flex;align-items:center;gap:6px;margin:12px 0 6px;padding:0 4px 0 10px;
+  font-size:12px;font-weight:600;color:var(--muted);
+}
+.grp .gic{display:flex;}
+.rule{height:1px;background:var(--line);margin:12px 4px;}
+.foot-rule{margin:6px 4px;}
+
+/* A group header that is also a destination still has to read as a header: same size and
+   colour as the others, with the affordance only on approach. */
+/* The hover state belongs to the ROW, not to the button inside it. With the background on
+   the inner button the highlight stopped short of the +, so the row looked half-lit while you
+   pointed at it — and pointing at the + itself dropped the highlight entirely. */
+.grp-head{
+  display:flex;align-items:center;gap:2px;margin:12px 0 4px;padding-right:4px;
+  border-radius:var(--r-md);transition:background .15s;
+}
+.grp-head:hover{background:var(--sunken);}
+.grp-head:hover .grp{color:var(--subink);}
+.grp-head .grp{margin:0;flex:1;min-width:0;background:none;padding:5px 6px 5px 4px;}
+.grp-lbl{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.grp-act{
+  width:24px;height:24px;flex:0 0 auto;display:flex;align-items:center;justify-content:center;
+  color:var(--muted);border-radius:var(--r-md);opacity:0;
+  transition:opacity .15s,background .15s,color .15s;
+}
+.grp-head:hover .grp-act,.grp-act:focus-visible{opacity:1;}
+/* On an EMPTY section the control is permanent. Hover-only is right when there are rows to
+   point at — it is how the sidebar stays quiet — but on a section with nothing under it,
+   hiding the only way to create something leaves a first-time user with a heading, a
+   chevron and no way in. Visible while empty; back to on-approach the moment there is one. */
+.grp-head.empty .grp-act{opacity:1;}
+.grp-act:hover{background:var(--line);color:var(--subink);}
+body[data-rail="1"] .grp-act{display:none;}
+.grp-tog{
+  width:16px;height:16px;flex:0 0 auto;display:flex;align-items:center;justify-content:center;
+  color:var(--muted);transition:transform .18s cubic-bezier(.4,0,.2,1);
+}
+/* Shut rotates the disclosure rather than swapping the glyph, so the control reads as one
+   thing in two positions. */
+.grp-head.shut .grp-tog{transform:rotate(-90deg);}
+.grp-count{
+  font-size:12px;font-weight:600;color:var(--muted);background:var(--sunken);
+  padding:1px 6px;border-radius:var(--r-md);flex:0 0 auto;
+}
+.grp-dot{position:static;margin-left:6px;}
+.grp-items.shut{display:none;}
+body[data-rail="1"] .grp-head{display:none;}
+.grp-go{margin-left:auto;display:flex;color:var(--muted);opacity:0;transition:opacity .15s,transform .15s;}
+.nav-more-row:hover .grp-go{opacity:1;transform:translateX(2px);}
+.nav-more-row .lbl{color:var(--muted);font-size:12px;}
+.nav-more-row:hover .lbl{color:var(--subink);}
+body[data-rail="1"] .nav-more-row{display:none;}
+
+.nav-wrap{position:relative;}
+/* Pointing at the row control still means pointing at the row. */
+.nav-wrap:hover > .nav{background:var(--sunken);color:var(--ink);}
+/* The row control appears only on the row you are pointing at — a column of dots down the
+   whole sidebar would compete with the labels it serves. The gutter is reserved PERMANENTLY
+   though: floating it over the label meant it sat on top of long names, and on the open-tab
+   dot, every time it appeared. */
+.nav-wrap > .nav{padding-right:56px;}
+/* The dot and the row control show TOGETHER — the reserved gutter means the control never
+   lands on the dot, so hiding one to make room for the other was solving a problem the
+   padding already solved. */
+.nav-more{
+  position:absolute;right:30px;top:50%;transform:translateY(-50%);
+  width:22px;height:22px;border-radius:var(--r-md);display:flex;align-items:center;justify-content:center;
+  color:var(--muted);opacity:0;transition:opacity .15s,background .15s,color .15s;
+}
+.nav-wrap:hover .nav-more,.nav-more:focus-visible{opacity:1;}
+.nav-more:hover{background:var(--line);color:var(--subink);}
+body[data-rail="1"] .nav-more{display:none;}
+.nav-input{
+  width:calc(100% - 8px);margin:1px 4px;height:34px;padding:0 9px;font:inherit;font-size:14px;
+  color:var(--ink);background:var(--surface);border:1px solid var(--primary);border-radius:var(--r-md);
+  box-shadow:0 0 0 3px rgba(38,93,220,.12);
+}
+/* Only for a provided group that could be empty and has no creation of its own. One short
+   line, upright — a sentence in italics reads as an apology. */
+.nav-empty{padding:4px 12px 8px 46px;font-size:14px;color:var(--muted);}
+/* rail (collapsed) */
+.rail-only{display:none;}
+body[data-rail="1"] .sb-brand .sb-lockup .sb-word,
+body[data-rail="1"] .sb-brand .sb-lockup .sb-by,
+body[data-rail="1"] .nav .lbl,
+body[data-rail="1"] .nav .badge,
+body[data-rail="1"] .grp,
+body[data-rail="1"] .rule:not(.foot-rule),
+body[data-rail="1"] .full-only{display:none;}
+body[data-rail="1"] .rail-only{display:block;}
+body[data-rail="1"] .sb-head{padding:16px 6px 8px;}
+body[data-rail="1"] .sb-brand{justify-content:center;}
+/* The control stays put when collapsed — it is a toggle, so hiding half of it left the rail
+   with no obvious way back. In the rail it centres under the mark and swaps its glyph. */
+body[data-rail="1"] .sb-head{padding:16px 6px 8px;}
+body[data-rail="1"] .sb-brand{flex-direction:column;gap:10px;}
+/* In the rail the toggle is the only affordance in the header, so it reads as a button rather
+   than as a bare glyph — a 28px target with a resting border, which is what makes it findable
+   without a label. */
+body[data-rail="1"] .sb-collapse{
+  width:28px;height:28px;border:1px solid var(--line);background:var(--surface);
+}
+body[data-rail="1"] .sb-collapse:hover{border-color:var(--border-strong);background:var(--sunken);}
+body[data-rail="1"] .sb-scroll{padding:0 6px;}
+body[data-rail="1"] .sb-foot{padding:8px 6px;}
+body[data-rail="1"] .nav{justify-content:center;padding:9px 0;gap:0;}
+/* Expanded, a status dot sits in the row's own flow beside its badge; only the open-tab
+   indicator owns the fixed trailing column. */
+.nav .dot.dot-status{position:static;transform:none;margin-left:2px;}
+/* In the rail there is one corner to put an indicator in, so a row that has both shows only
+   the status — the open-tab dot is suppressed for that row in navRow(). */
+body[data-rail="1"] .nav .dot{position:absolute;top:6px;right:8px;}
+body[data-rail="1"] .nav .dot.dot-status{position:absolute;top:6px;right:8px;margin:0;}
+
+/* Rail shows ONE icon per section, not every item — the items carry no icon of
+   their own, so rendering them collapsed would leave empty rows. */
+/* Children are indented so the hierarchy is visible without reading it: a header and its
+   rows aligned to the same left edge made Dashboards look like a sibling of the row above.
+   The inset lines child labels up under the header label, past the header's icon. */
+/* 35px, not a guess: it puts a child label at the same x as the header label, which sits
+   after the twisty and the section icon. Aligning child text under parent text is the read
+   Finder and VS Code both use — 14px only moved the rows and still left them to the LEFT of
+   the header they belong to, which is what made Dashboards look like a sibling. */
+/* The indent lives on the ROW now, not on the container. With 35px of container padding a
+   child row's box was 35px narrower than a primary row's, so its hover highlight was a
+   different SHAPE as well as a different colour — and no left-edge indicator could line up.
+   45px on the row keeps the label at the same x and gives every row one width. */
+.grp-items{display:block;}
+.grp-items > .nav,.grp-items > .nav-wrap > .nav{padding-left:46px;}
+.grp-icon{display:none;}
+body[data-rail="1"] .grp-items{display:none;}
+body[data-rail="1"] .grp-icon{display:flex;}
+body[data-rail="1"] .grp-icon .ic{color:var(--muted);}
+body[data-rail="1"] .grp-icon[aria-current="page"] .ic{color:var(--primary);}
+
+/* ONE tooltip, position:fixed, outside the sidebar. Anchoring it to the control could not
+   work: the sidebar is a 260px dense list with overflow-x:hidden, so a tooltip placed below
+   covered the next row, above covered the previous one, and beside it got clipped at the
+   sidebar edge. Fixed positioning puts it over the canvas — the only space that is free. */
+#tipLayer{
+  pointer-events:none;position:fixed;z-index:120;
+  padding:5px 9px;border-radius:var(--r-md);background:var(--ink);color:#fff;
+  font-size:12px;font-weight:500;white-space:nowrap;box-shadow:var(--shadow-tip);
+  opacity:0;transition:opacity .13s ease,transform .13s ease;
+}
+/* It rises into place from the side it sits on, so the motion says where it came from. */
+#tipLayer[data-place="below"]{transform:translateY(-3px);}
+#tipLayer[data-place="above"]{transform:translateY(3px);}
+#tipLayer[data-place="right"]{transform:translateX(-3px);}
+#tipLayer[data-on="1"]{opacity:1;transform:translateY(0);}
+
+/* account row */
+.acct{display:flex;align-items:center;gap:10px;padding:8px;border-radius:var(--r-lg);width:100%;transition:background .15s;}
+.acct:hover{background:var(--sunken);}
+.avatar{
+  width:28px;height:28px;border-radius:99px;background:var(--sunken);flex:0 0 auto;
+  display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;color:var(--subink);
+}
+/* .who is a <span> holding two <span>s. Left inline, the name and the email land on the
+   SAME line and overlap — which is exactly what it was doing. It has to be a column, and
+   it has to be the flex child that shrinks, or the ellipsis never triggers. */
+.acct .who{display:flex;flex-direction:column;min-width:0;flex:1;text-align:left;}
+.acct .nm{font-size:14px;font-weight:500;color:var(--ink);line-height:16px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.acct .em{font-size:12px;color:var(--muted);line-height:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.acct-caret{color:var(--muted);display:flex;flex:0 0 auto;}
+body[data-rail="1"] .acct-caret{display:none;}
+.acct-menu{width:236px;}
+/* No rule between the identity block and Log out. The overflow menu keeps its divider,
+   because there a head introduces a LIST of tabs and the line is what says "the rows below
+   are the contents". Here there is one action, not contents — a rule would be dividing a
+   two-line menu into two menus. Scoped to .acct-menu rather than removed from .ovf-head, so
+   the tab-overflow menu is untouched. */
+.acct-menu .ovf-head{border-bottom:0;padding-bottom:2px;}
+body[data-rail="1"] .acct{justify-content:center;padding:6px 0;}
+body[data-rail="1"] .acct .who{display:none;}
+
+/* ─────────────────────────────────────────────────────────────
+   CONTEXT CHIP — admin only. Non-admin renders nothing at all,
+   and the wrapper collapses so no vertical space is reserved.
+   ───────────────────────────────────────────────────────────── */
+@keyframes pop{from{opacity:0;transform:translateY(-4px) scale(.985);}to{opacity:1;transform:none;}}
+
+/* ─────────────────────────────────────────────────────────────
+   TAB STRIP — high fidelity. The core of this prototype.
+   Never scrolls (overflow:hidden). Tabs never shrink (flex:0 0 auto).
+   ───────────────────────────────────────────────────────────── */
+.main{flex:1;min-width:0;display:flex;flex-direction:column;}
+.strip{
+  height:var(--strip-h);flex:0 0 var(--strip-h);
+  background:var(--surface);border-bottom:1px solid var(--line);
+  display:flex;align-items:stretch;gap:2px;padding:0 6px;
+  overflow:hidden;              /* the strip never scrolls horizontally. ever. */
+}
+.tab{
+  position:relative;flex:0 0 auto;               /* never shrinks to fit */
+  min-width:var(--tab-min);max-width:var(--tab-max);
+  display:flex;flex-direction:column;justify-content:flex-end;
+  cursor:pointer;user-select:none;transition:background .15s;
+  border-radius:var(--r-md) var(--r-md) 0 0;
+}
+.tab:hover{background:var(--sunken);}
+.tab-row{flex:1;display:flex;align-items:center;gap:6px;padding:0 8px 0 10px;min-width:0;}
+.tab .lbl{
+  flex:1;min-width:0;font-size:14px;font-weight:500;line-height:1.4;color:var(--subink);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;transition:color .15s;
+}
+.tab .underline{
+  height:2px;width:100%;border-radius:1px 1px 0 0;background:var(--primary);
+  opacity:0;transition:opacity .15s;
+}
+.tab:hover .underline{opacity:.3;}
+.tab[aria-selected="true"]{background:rgba(239,244,255,.6);}
+.tab[aria-selected="true"] .lbl{color:var(--primary);}
+.tab[aria-selected="true"] .underline{opacity:1;}
+
+/* transient — italic label + dashed right edge. One at a time, always last. */
+
+.tab-btn{
+  width:18px;height:18px;border-radius:var(--r-sm);flex:0 0 auto;
+  display:flex;align-items:center;justify-content:center;color:rgba(103,109,122,.75);
+  opacity:0;transition:opacity .15s,background .15s,color .15s;
+}
+.tab-btn:hover{background:var(--line);color:var(--ink);}
+/* close + keep appear on hover and on the focused tab only — never persistently on all tabs */
+.tab:hover .tab-btn,.tab[aria-selected="true"] .tab-btn{opacity:1;}
+/* Kept state stays legible at rest, but must not compete with the label. */
+
+.tab[data-dragging="true"]{opacity:.45;}
+.tab[data-dropbefore="true"]{box-shadow:inset 2px 0 0 var(--primary);}
+
+/* per-tab status markers for the Tools tab */
+.marker{width:14px;height:14px;flex:0 0 auto;display:flex;align-items:center;justify-content:center;}
+.marker.warn{color:var(--warning-fg);}
+.marker.spin{
+  border:1.5px solid rgba(38,93,220,.25);border-top-color:var(--primary);border-radius:99px;
+  animation:spin .7s linear infinite;
+}
+@keyframes spin{to{transform:rotate(360deg);}}
+
+/* +n overflow control */
+.ovf{
+  flex:0 0 auto;align-self:center;margin-left:4px;height:26px;padding:0 10px;border-radius:var(--r-md);
+  background:var(--sunken);color:var(--subink);font-size:12px;font-weight:600;
+  display:none;align-items:center;gap:4px;transition:background .15s,color .15s;
+}
+.ovf:hover{background:var(--secondary);color:var(--primary);}
+.ovf[data-show="1"]{display:flex;}
+.ovf-menu{
+  position:absolute;z-index:70;width:268px;background:var(--surface);border:1px solid var(--line);
+  border-radius:var(--r-xl);box-shadow:var(--shadow-pop);overflow:hidden;animation:pop .16s cubic-bezier(.4,0,.2,1);
+}
+.ovf-head{padding:10px 14px 8px;border-bottom:1px solid var(--line);}
+.ovf-head .t{font-size:14px;font-weight:600;color:var(--ink);}
+.ovf-head .s{font-size:12px;color:var(--muted);margin-top:2px;}
+/* The employer line sits with the identity but reads as a different fact, so it gets the
+   separation a rule gives rather than looking like a second email. */
+/* Above the name, so it reads as the scope the identity sits inside rather than as a second
+   line of it: smaller, uppercase-free, and separated by space rather than a rule. */
+.ovf-head .org-line{margin:0 0 6px;color:var(--subink);font-weight:500;}
+.ovf-list{padding:6px;max-height:260px;overflow-y:auto;}
+.ovf-item{width:100%;display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:var(--r-md);text-align:left;transition:background .12s;}
+.ovf-item:hover{background:var(--sunken);}
+.ovf-item .ic{color:var(--muted);display:flex;flex:0 0 auto;}
+.ovf-item .t{font-size:14px;color:var(--ink);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.ovf-item .s{font-size:12px;color:var(--muted);flex:0 0 auto;}
+
+/* ─────────────────────────────────────────────────────────────
+   CANVAS — SKELETON ONLY. Nothing in here is designed on purpose.
+   ───────────────────────────────────────────────────────────── */
+.canvas{flex:1;min-height:0;overflow-y:auto;padding:24px 28px 64px;}
+.page-head{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:18px;}
+.page-title{font-size:20px;font-weight:650;letter-spacing:-.01em;color:var(--ink);}
+.set-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+.set-field.wide{grid-column:1 / -1;}
+.set-label{font-size:12px;color:var(--muted);margin-bottom:6px;}
+.set-input{
+  height:40px;border:1px solid var(--line);border-radius:var(--r-md);background:var(--surface);
+  display:flex;align-items:center;padding:0 12px;
+}
+.page-sub{font-size:13px;color:var(--muted);margin-top:3px;}
+.sk-title{height:14px;border-radius:var(--r-sm);background:var(--line);width:220px;}
+.sk-sub{height:9px;border-radius:var(--r-sm);background:var(--line2);width:300px;margin-top:9px;}
+.sk-bar{height:9px;border-radius:var(--r-sm);background:var(--line2);}
+.sk-block{border-radius:var(--r-md);background:var(--line2);}
+.sk-sq{width:22px;height:22px;border-radius:var(--r-md);background:var(--line);flex:0 0 auto;}
+.sk-stack{display:flex;flex-direction:column;gap:8px;}
+
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-xl);padding:18px;}
+/* Real title line only — reviewers need to recognise the layout, nothing more. */
+.card-title{font-size:14px;font-weight:600;color:var(--ink);}
+.card-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px;}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;}
+.wide{grid-column:1 / -1;}
+
+.dashed{border:1px dashed var(--border-strong);border-radius:var(--r-lg);background:transparent;}
+
+/* Index pages. Templates are the one thing on these pages that reads as real, because a
+   template you cannot read is a template you cannot react to in review. */
+.ix-sec{margin-bottom:26px;}
+.ix-h{display:flex;align-items:baseline;gap:9px;margin-bottom:4px;}
+.ix-h .t{font-size:15px;font-weight:650;color:var(--ink);}
+.ix-h .c{font-size:12px;color:var(--muted);}
+.ix-sub{font-size:13px;color:var(--muted);margin-bottom:14px;max-width:62ch;line-height:1.5;}
+.ix-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(232px,1fr));gap:14px;}
+.tpl{
+  border:1px solid var(--line);border-radius:var(--r-lg);background:var(--surface);padding:14px;
+  display:flex;flex-direction:column;gap:10px;text-align:left;width:100%;
+  transition:border-color .15s,box-shadow .15s,transform .15s;
+}
+.tpl:hover{border-color:var(--primary);box-shadow:0 4px 14px rgba(15,23,42,.07);transform:translateY(-1px);}
+.tpl-top{display:flex;align-items:center;gap:9px;}
+.tpl-ic{
+  width:28px;height:28px;border-radius:8px;flex:0 0 auto;display:flex;align-items:center;justify-content:center;
+  background:var(--secondary);color:var(--secondary-fg);
+}
+.tpl-t{font-size:13.5px;font-weight:600;color:var(--ink);}
+.tpl-d{font-size:12px;color:var(--muted);line-height:1.5;}
+.tpl-go{font-size:12px;font-weight:600;color:var(--secondary-fg);display:flex;align-items:center;gap:5px;margin-top:auto;}
+.ix-card{
+  border:1px solid var(--line);border-radius:var(--r-lg);background:var(--surface);padding:14px;
+  text-align:left;width:100%;display:flex;flex-direction:column;gap:10px;
+  transition:border-color .15s,box-shadow .15s;
+}
+.ix-card:hover{border-color:var(--border-strong);box-shadow:0 4px 14px rgba(15,23,42,.06);}
+.ix-row{
+  display:flex;align-items:center;gap:12px;padding:13px 4px;border-bottom:1px solid var(--line2);
+  text-align:left;width:100%;transition:background .12s;
+}
+.ix-row:hover{background:var(--sunken);}
+.ix-row .t{font-size:13.5px;color:var(--ink);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.ix-blank{
+  border:1px dashed var(--border-strong);border-radius:var(--r-lg);padding:22px;
+  display:flex;flex-direction:column;align-items:flex-start;gap:10px;
+}
+.dashed-lbl{
+  font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;font-weight:600;color:var(--border-strong);
+}
+.strip-note{
+  display:flex;align-items:center;gap:10px;padding:9px 14px;border:1px solid var(--line);
+  border-radius:var(--r-lg);background:var(--surface);margin-bottom:16px;
+}
+.btn{
+  display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 14px;border-radius:var(--r-md);
+  font-size:13px;font-weight:500;transition:background .15s,border-color .15s,color .15s;
+}
+.btn-primary{background:var(--primary);color:var(--primary-fg);}
+.btn-primary:hover{background:var(--primary-hover);}
+.btn-tertiary{background:var(--secondary);color:var(--secondary-fg);}
+.btn-tertiary:hover{background:var(--secondary-hover);}
+.btn-outline{border:1px solid var(--line);color:var(--subink);background:var(--surface);}
+.btn-outline:hover{border-color:var(--border-strong);}
+.btn-ghost{color:var(--muted);}
+.btn-ghost:hover{color:var(--ink);}
+.btn-sm{height:28px;padding:0 10px;font-size:12.5px;}
+
+/* Ask Cait landing — centred composition, mirroring the real surface */
+.ask-wrap{min-height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;}
+.ask-inner{width:100%;max-width:760px;display:flex;flex-direction:column;align-items:center;}
+/* Skeleton prompt chips — the shape of three suggestions, not three suggestions. */
+.sk-pill{
+  border:1px solid var(--line);border-radius:99px;height:40px;padding:0 20px;
+  display:flex;align-items:center;justify-content:center;flex:0 0 auto;
+}
+.ask-composer{
+  width:100%;border:1px solid var(--line);background:var(--surface);border-radius:99px;
+  display:flex;align-items:center;gap:14px;padding:15px 15px 15px 26px;
+  box-shadow:0 8px 28px rgba(15,23,42,.07);
+}
+.ask-send{width:44px;height:44px;border-radius:99px;border:1px solid var(--line);flex:0 0 auto;
+  display:flex;align-items:center;justify-content:center;color:var(--subink);}
+
+/* ── Ask Cait landing — the front door ──────────────────────────────────────
+   Top-aligned rather than centred: it has a goal deck under the fold, so centring the block
+   would push the deck off screen on a laptop and hide the half of the page that says what
+   this product does. */
+/* Centred, not top-aligned: top-alignment existed to keep a goal deck above the fold, and
+   with the deck gone it only left the page hanging from the tab strip. */
+.ask-wrap.landing{padding:40px 0;}
+.ask-chips{display:flex;gap:12px;flex-wrap:wrap;justify-content:center;margin-bottom:22px;}
+.ask-composer.glow{box-shadow:0 10px 34px rgba(38,93,220,.10),0 2px 8px rgba(15,23,42,.05);}
+
+/* Memory — eyebrow, headline, then sectioned entry list */
+.mem-wrap{max-width:1020px;margin:0 auto;}
+.mem-sec{display:flex;align-items:center;gap:10px;margin:30px 0 12px;}
+.mem-sec-icon{width:24px;height:24px;border-radius:8px;background:var(--secondary);flex:0 0 auto;}
+.mem-card{
+  background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);
+  padding:16px 18px;display:flex;gap:13px;align-items:flex-start;
+}
+.mem-dot{width:7px;height:7px;border-radius:99px;background:var(--dot-quiet);flex:0 0 auto;margin-top:5px;}
+
+/* shimmer for the Tools loading state */
+.shimmer{position:relative;overflow:hidden;}
+.shimmer::after{
+  content:"";position:absolute;inset:0;transform:translateX(-100%);
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,.75),transparent);
+  animation:shimmer 1.4s infinite;
+}
+@keyframes shimmer{100%{transform:translateX(100%);}}
+
+/* bounded states inside the Tools canvas */
+/* ── ALERT ──────────────────────────────────────────────────────────────────
+   Design system component, Components file 468:26190 (info) / 26196 (success) /
+   26201 (warning) / 26207 (error), Subtle variant. Geometry is the spec: 12px padding,
+   8px gap, 8px radius, 52px min-height, 24px filled icon, title Bold 16/20, body
+   Regular 16/1.5, optional pill action with a 1px ink border, 32px dismiss target.
+   Replaces the three hand-rolled state boxes and the restore chip this file had, which
+   each invented their own padding, border alpha and icon size. */
+.alert{
+  display:flex;align-items:flex-start;gap:8px;
+  min-height:52px;padding:12px;border-radius:var(--r-md);
+  border:1px solid;overflow:hidden;
+}
+.alert-ic{width:24px;height:24px;flex:0 0 auto;display:flex;}
+.alert-body{flex:1 1 0;min-width:0;display:flex;flex-direction:column;gap:4px;justify-content:center;word-break:break-word;}
+.alert-t{font-size:16px;line-height:20px;font-weight:700;color:var(--ink);}
+.alert-m{font-size:16px;line-height:1.5;color:var(--ink);}
+.alert-act{
+  flex:0 0 auto;min-height:32px;min-width:72px;padding:4px 16px;border-radius:99px;
+  border:1px solid var(--ink);background:transparent;color:var(--ink);
+  font-size:14px;line-height:22px;font-weight:500;
+  display:inline-flex;align-items:center;justify-content:center;gap:4px;
+  transition:background .15s;
+}
+.alert-act:hover{background:rgba(0,0,0,.06);}
+.alert-x{
+  flex:0 0 auto;min-width:32px;min-height:32px;padding:4px;border-radius:99px;
+  display:inline-flex;align-items:center;justify-content:center;color:var(--ink);
+  transition:background .15s;
+}
+.alert-x:hover{background:rgba(0,0,0,.06);}
+.alert-info{background:var(--info-subtle);border-color:var(--info-brd);}
+.alert-info .alert-ic{color:var(--info);}
+.alert-success{background:var(--success-subtle);border-color:var(--success-brd);}
+.alert-success .alert-ic{color:var(--success);}
+.alert-warning{background:var(--warning-subtle);border-color:var(--warning-brd);}
+.alert-warning .alert-ic{color:var(--warning);}
+.alert-error{background:var(--danger-subtle);border-color:var(--danger-brd);}
+.alert-error .alert-ic{color:var(--danger);}
+.dimmed{opacity:.45;pointer-events:none;}
+/* For facts that are worth stating and not worth interrupting for. */
+.quiet-note{font-size:12.5px;color:var(--muted);margin-bottom:12px;}
+
+/* ─────────────────────────────────────────────────────────────
+   Tools canvas — a shape-faithful skeleton of the Candidly platform.
+   Its LEFT NAV is high fidelity (real groups, real labels, real states):
+   nested navigation is the thing under review, so it cannot be a grey box.
+   Everything in the content column stays skeleton.
+   No widget top bar: the host shell already owns that chrome, so the embed
+   contributes its nav and its content column and nothing else.
+   Collapsed is the product's own behaviour — the nav is TUCKED AWAY entirely
+   behind a Menu button, not stepped down to an icon rail. The platform has no
+   icon rail, so neither does this.
+   ───────────────────────────────────────────────────────────── */
+.embed{display:flex;min-height:520px;padding:0;gap:0;overflow:hidden;border-radius:var(--r-lg);}
+.embed-nav{
+  width:var(--embed-nav-w);flex:0 0 var(--embed-nav-w);min-width:0;
+  border-right:1px dashed var(--border-strong);background:var(--paper);
+  display:flex;flex-direction:column;padding:8px 0 12px;overflow:hidden;
+  /* Same duration and curve as the host sidebar rail, so a nested collapse reads
+     as the same gesture one level down rather than a second, unrelated animation. */
+  transition:width .26s cubic-bezier(.4,0,.2,1),flex-basis .26s cubic-bezier(.4,0,.2,1),
+             opacity .18s ease, padding .26s cubic-bezier(.4,0,.2,1);
+}
+.embed-nav.tucked{
+  width:0;flex-basis:0;padding-left:0;padding-right:0;opacity:0;
+  border-right-color:transparent;pointer-events:none;
+}
+.enav-scroll{overflow:hidden;display:flex;flex-direction:column;min-width:var(--embed-nav-w);}
+.enav-head{display:flex;align-items:center;padding:2px 10px 6px;}
+.enav-collapse{
+  margin-left:auto;width:24px;height:24px;border-radius:99px;flex:0 0 auto;
+  display:flex;align-items:center;justify-content:center;
+  background:var(--surface);border:1px solid var(--line);color:var(--muted);
+  transition:background .15s,color .15s,border-color .15s;
+}
+.enav-collapse:hover{border-color:var(--border-strong);color:var(--subink);}
+/* The active row is a solid ink block in the product, and it is the one piece of
+   nav colour that is not in Cait's palette — kept as --subink, the nearest token. */
+.enav-row{
+  display:flex;align-items:center;gap:12px;padding:9px 12px;font-size:13.5px;
+  color:var(--subink);white-space:nowrap;min-width:0;
+}
+.enav-row.active{background:var(--subink);color:#fff;font-weight:600;}
+.enav-row .ic{color:var(--muted);display:flex;flex:0 0 auto;}
+.enav-row.active .ic{color:#fff;}
+.enav-lbl{overflow:hidden;text-overflow:ellipsis;}
+.enav-grp{
+  font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);
+  padding:15px 12px 4px;white-space:nowrap;
+}
+/* TOKEN GAP: the product's "Powered by AI" pill is lilac; Cait's badge token is
+   blue (--secondary). Tinted from --rose so the pill still reads as itself,
+   rather than inventing a hex. */
+.enav-badge{
+  margin-left:auto;flex:0 0 auto;font-size:10.5px;font-weight:600;padding:2px 7px;
+  border-radius:var(--r-md);background:color-mix(in srgb, var(--rose) 22%, #fff);
+  color:color-mix(in srgb, var(--rose) 75%, #000);
+}
+.enav-caret{margin-left:auto;flex:0 0 auto;color:var(--muted);display:flex;}
+
+.embed-canvas{flex:1;min-width:0;padding:14px 16px;}
+/* Collapsed: the product's own way back in. Sits at the top of the content
+   column because the embed has no top bar of its own inside the host shell. */
+.embed-menu{
+  display:inline-flex;align-items:center;gap:8px;height:30px;padding:0 12px;
+  border-radius:var(--r-md);border:1px solid var(--line);background:var(--surface);
+  font-size:12.5px;font-weight:600;color:var(--subink);margin-bottom:14px;
+  transition:border-color .15s,background .15s;
+}
+.embed-menu:hover{border-color:var(--border-strong);background:var(--paper);}
+
+/* content skeleton, shaped like the real page */
+.ec-hero{display:flex;gap:18px;align-items:flex-start;}
+.ec-hero-l{flex:1.05;min-width:0;display:flex;flex-direction:column;gap:12px;}
+.ec-hero-r{flex:.95;min-width:0;position:relative;}
+.ec-eyebrow{display:flex;align-items:center;gap:9px;}
+.ec-bullet{
+  display:flex;align-items:center;gap:9px;padding:9px 11px;
+  border:1px solid var(--line);border-radius:var(--r-md);background:var(--surface);
+}
+.ec-cta{display:flex;gap:10px;align-items:center;}
+.ec-shot{border-radius:var(--r-lg);background:var(--line2);aspect-ratio:16/11;width:100%;}
+.ec-bub{
+  position:absolute;left:-14px;border-radius:var(--r-lg);background:var(--surface);
+  box-shadow:var(--shadow-tip);padding:9px 12px;
+}
+.ec-card{
+  border:1px solid var(--line);border-radius:var(--r-lg);background:var(--surface);
+  padding:16px;margin-top:14px;
+}
+.ec-cols{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;}
+.ec-cols-2{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+/* Number markers are rounded squares, radius 8 — never circles (Candidly rule). */
+.ec-num{
+  width:26px;height:26px;border-radius:8px;background:var(--secondary);color:var(--secondary-fg);
+  display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;
+}
+.ec-sub{border:1px solid var(--line);border-radius:var(--r-lg);padding:14px;position:relative;}
+.ec-chip{
+  position:absolute;top:-9px;right:12px;font-size:10.5px;font-weight:600;padding:2px 8px;
+  border-radius:var(--r-md);background:color-mix(in srgb, var(--rose) 22%, #fff);
+  color:color-mix(in srgb, var(--rose) 75%, #000);
+}
+.ec-check{display:flex;gap:8px;align-items:flex-start;}
+.ec-check .ic{color:var(--success-fg);flex:0 0 auto;margin-top:1px;}
+.ec-quote{border:1px solid var(--line);border-radius:var(--r-lg);padding:14px;background:var(--surface);}
+.ec-qmark{font-size:26px;line-height:1;color:var(--line);font-weight:700;}
+.ec-faq{display:flex;align-items:center;gap:10px;padding:12px 0;border-top:1px solid var(--line2);}
+/* admin product page: banner, tabs, search, filters, employee table */
+.ec-banner{
+  display:flex;align-items:center;gap:12px;border:1px solid var(--line);border-radius:var(--r-lg);
+  background:var(--surface);padding:14px 16px;margin-bottom:16px;
+}
+.ec-tabs{display:flex;gap:20px;border-bottom:1px solid var(--line);margin-bottom:16px;}
+.ec-tab{padding-bottom:10px;}
+.ec-tab.on{border-bottom:2px solid var(--primary);}
+.ec-field{border:1px solid var(--line);border-radius:var(--r-md);height:42px;display:flex;align-items:center;padding:0 12px;flex:1;min-width:0;}
+.ec-sels{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin:18px 0 22px;}
+.ec-sel{
+  border:1px solid var(--line);border-radius:var(--r-md);height:40px;
+  display:flex;align-items:center;justify-content:space-between;gap:8px;padding:0 10px;
+}
+.et-row{
+  display:grid;grid-template-columns:.62fr 1.05fr 1fr .72fr .8fr .62fr .5fr;gap:12px;
+  align-items:center;padding:12px 0;border-bottom:1px solid var(--line2);
+}
+.et-row.head{border-bottom:1px solid var(--line);}
+.et-status{display:flex;align-items:center;gap:6px;}
+.et-dot{width:7px;height:7px;border-radius:99px;background:var(--success);flex:0 0 auto;}
+.et-foot{display:flex;align-items:center;gap:14px;padding-top:14px;}
+.ec-faq:first-of-type{border-top:none;}
+
+/* THE PERSISTENT ASSISTANT. Cait is reachable from every surface, so the shell carries a
+   floater bottom-right — except on a chat surface, where the composer is already the way in and
+   a second entry point would be talking over itself. Collapsed it is the mark with a presence
+   dot; expanded it offers the same starting prompts the marketing surfaces use. */
+.pa{position:fixed;right:20px;bottom:20px;z-index:85;display:flex;flex-direction:column;align-items:flex-end;gap:10px;}
+.pa-prompts{display:flex;flex-direction:column;align-items:flex-end;gap:8px;}
+.pa-prompt{
+  background:var(--surface);border:1px solid var(--line);border-radius:99px;
+  padding:9px 16px;font-size:13.5px;color:var(--ink);box-shadow:var(--shadow-tip);
+  animation:pop .18s cubic-bezier(.4,0,.2,1);transition:border-color .15s,transform .15s;
+}
+.pa-prompt:hover{border-color:var(--primary);transform:translateY(-1px);}
+.pa-fab{
+  width:56px;height:56px;border-radius:99px;position:relative;flex:0 0 auto;
+  background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow-pop);
+  display:flex;align-items:center;justify-content:center;color:var(--primary);
+  transition:transform .18s cubic-bezier(.4,0,.2,1),border-color .15s;
+}
+.pa-fab:hover{transform:scale(1.04);border-color:var(--border-strong);}
+.pa-dot{
+  position:absolute;top:6px;right:6px;width:9px;height:9px;border-radius:99px;
+  background:var(--success);box-shadow:0 0 0 2px var(--surface);
+}
+@media (max-width:900px){ .pa{display:none;} }
+
+/* ─────────────────────────────────────────────────────────────
+   DEMO CONTROLS — deliberately NOT product chrome.
+   ───────────────────────────────────────────────────────────── */
+.demo{
+  width:var(--demo-w);flex:0 0 var(--demo-w);background:var(--subink);color:#fff;
+  display:flex;flex-direction:column;border-left:3px solid var(--info);
+  font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+body[data-demo="0"] .demo{display:none;}
+.demo-head{padding:14px 16px 12px;border-bottom:1px solid rgba(255,255,255,.1);display:flex;align-items:flex-start;justify-content:space-between;gap:10px;}
+.demo-head .t{font-size:11px;letter-spacing:.14em;text-transform:uppercase;font-weight:700;color:var(--info);}
+.demo-head .s{font-size:10.5px;color:rgba(255,255,255,.5);margin-top:4px;line-height:1.45;}
+.demo-scroll{flex:1;overflow-y:auto;padding:14px 16px 20px;}
+.demo-scroll::-webkit-scrollbar-thumb{background:rgba(255,255,255,.2);}
+.dgroup{margin-bottom:16px;}
+.dlabel{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:rgba(255,255,255,.45);margin-bottom:6px;font-weight:600;}
+.seg{display:flex;gap:4px;flex-wrap:wrap;}
+.seg button{
+  padding:5px 10px;border-radius:var(--r-md);font-size:11.5px;font-weight:600;
+  background:rgba(255,255,255,.08);color:rgba(255,255,255,.75);transition:background .15s,color .15s;
+}
+.seg button:hover{background:rgba(255,255,255,.16);color:#fff;}
+.seg button[aria-pressed="true"]{background:var(--info);color:var(--demo-ink);}
+.dbtn{
+  width:100%;padding:8px 10px;border-radius:var(--r-md);font-size:11.5px;font-weight:600;text-align:left;
+  background:rgba(255,255,255,.08);color:#fff;margin-bottom:6px;transition:background .15s;
+}
+.dbtn:hover{background:rgba(255,255,255,.18);}
+.dhint{font-size:10px;color:rgba(255,255,255,.4);line-height:1.5;margin-top:6px;}
+.log{display:flex;flex-direction:column;gap:5px;}
+.log-item{
+  padding:7px 9px;border-radius:var(--r-md);background:rgba(255,255,255,.06);
+  border-left:2px solid var(--info);animation:logIn .22s cubic-bezier(.4,0,.2,1);
+}
+.log-item .r{font-size:11.5px;font-weight:700;color:#fff;line-height:1.35;}
+.log-item .d{font-size:10.5px;color:rgba(255,255,255,.55);margin-top:2px;line-height:1.4;}
+.log-item .n{font-size:9.5px;color:rgba(255,255,255,.3);margin-top:3px;}
+.log-item[data-kind="auto"]{border-left-color:var(--rose);}
+.log-item[data-kind="block"]{border-left-color:var(--warning);}
+.log-item[data-kind="ctx"]{border-left-color:var(--success);}
+@keyframes logIn{from{opacity:0;transform:translateY(-6px);}to{opacity:1;transform:none;}}
+/* Beside the assistant, not above it: the prompt stack grows upward, so any vertical offset
+   would eventually collide with it. */
+.demo-toggle{
+  position:fixed;right:92px;bottom:26px;z-index:90;height:34px;padding:0 14px;border-radius:99px;
+  background:var(--subink);color:#fff;font-size:11.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
+  display:flex;align-items:center;gap:7px;box-shadow:var(--shadow-pop);
+  font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   MOBILE STUB — one screen, per scope. No tab strip.
+   ───────────────────────────────────────────────────────────── */
+#mobile{display:none;}
+@media (max-width:760px){
+  #app,.demo-toggle{display:none;}
+  #mobile{
+    display:flex;flex-direction:column;height:100%;background:var(--paper);
+  }
+}
+.m-top{
+  height:52px;flex:0 0 52px;background:var(--surface);border-bottom:1px solid var(--line);
+  display:flex;align-items:center;gap:10px;padding:0 14px;
+}
+.m-chip{
+  display:inline-flex;align-items:center;gap:7px;height:30px;padding:0 6px 0 11px;border-radius:99px;
+  background:var(--secondary);color:var(--secondary-fg);font-size:13px;font-weight:600;
+}
+.m-count{
+  min-width:19px;height:19px;padding:0 5px;border-radius:99px;background:var(--primary);color:#fff;
+  font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;
+}
+.m-body{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:32px 26px;text-align:center;}
+.m-title{font-size:18px;font-weight:700;color:var(--ink);}
+.m-copy{font-size:13.5px;color:var(--muted);line-height:1.55;max-width:300px;}
+</style>
+<style id="research-demo-gate">
+  /* Research build: Sheetal's demo/review panel is design scaffolding, not product.
+     Hidden for testers; add ?demo=1 to the URL to bring it back for prep. */
+  html[data-research-demo="0"] .demo,
+  html[data-research-demo="0"] .demo-toggle{display:none !important}
+</style>
+<script>
+  document.documentElement.setAttribute('data-research-demo',
+    new URLSearchParams(location.search).get('demo')==='1' ? '1' : '0');
+</script>
+</head>
+<body data-role="employee" data-rail="0" data-demo="1">
+
+<div id="app">
+  <div class="shell">
+
+    <!-- ── SIDEBAR (high fidelity) ─────────────────────────── -->
+    <aside class="sidebar">
+      <div class="sb-head">
+        <div class="sb-brand">
+          <div class="sb-lockup">
+            <!-- Cait mark, lifted from home.html WSCaitMark -->
+            <svg width="24" height="24" viewBox="0 0 28 28" fill="none" style="flex:0 0 auto">
+              <path d="M27.8551 18.4464C27.7614 18.3306 27.631 18.2515 27.4863 18.2227C25.9668 17.9192 24.7644 16.7058 24.4702 15.2182C24.441 15.072 24.363 14.9405 24.2494 14.8461C24.1359 14.7517 23.9937 14.7001 23.847 14.7001C23.7003 14.7001 23.5581 14.7517 23.4445 14.8461C23.3309 14.9405 23.2529 15.072 23.2237 15.2182C22.9295 16.7058 21.6332 17.92 20.1136 18.2235C19.9689 18.2524 19.8386 18.3314 19.7449 18.4473C19.6512 18.563 19.6 18.7083 19.6 18.8583C19.6 19.0082 19.6512 19.1535 19.7449 19.2693C19.8386 19.3851 19.9689 19.4642 20.1136 19.493C21.6332 19.7957 22.9295 21.0936 23.2237 22.5821C23.2529 22.7283 23.3309 22.8597 23.4445 22.9541C23.5581 23.0485 23.7003 23.1001 23.847 23.1001C23.9937 23.1001 24.1359 23.0485 24.2494 22.9541C24.363 22.8597 24.441 22.7283 24.4702 22.5821C24.7644 21.0936 25.9668 19.7957 27.4863 19.4921C27.631 19.4633 27.7614 19.3842 27.8551 19.2685C27.9488 19.1526 28 19.0074 28 18.8574C28 18.7074 27.9488 18.5622 27.8551 18.4464Z" fill="#CB99D5"/>
+              <rect width="16.8" height="7.7" rx="3.85" transform="matrix(1 0 0 -1 0 22.75)" fill="url(#cg)"/>
+              <rect width="16.8" height="7.7" rx="3.85" transform="matrix(1 0 0 -1 11.2002 12.25)" fill="#265DDC"/>
+              <ellipse cx="3.85" cy="3.85" rx="3.85" ry="3.85" transform="matrix(-1 0 0 1 7.7002 4.55005)" fill="#265DDC"/>
+              <defs><linearGradient id="cg" x1="0" y1="3.85" x2="16.8" y2="3.85" gradientUnits="userSpaceOnUse">
+                <stop stop-color="#ACDEFC"/><stop offset="1" stop-color="#CB99D5"/></linearGradient></defs>
+            </svg>
+            <span class="sb-word" id="sbWord"></span>
+            <span class="sb-by" id="sbBy"></span>
+          </div>
+          <button class="sb-collapse" id="collapseBtn" aria-label="Collapse sidebar" data-tip="Collapse sidebar"></button>
+        </div>
+      </div>
+
+      <!-- Admin-only. Non-admin renders nothing here and the slot has zero height. -->
+
+      <nav class="sb-scroll" id="sbScroll" aria-label="Main"></nav>
+      <nav class="sb-foot" id="sbFoot" aria-label="Account and settings"></nav>
+    </aside>
+
+    <!-- ── MAIN ────────────────────────────────────────────── -->
+    <div class="main">
+      <div class="strip" id="strip" role="tablist" aria-label="Open tabs"></div>
+      <div class="canvas" id="canvas" role="tabpanel"></div>
+    </div>
+  </div>
+
+  <!-- ── DEMO CONTROLS (not product UI) ────────────────────── -->
+  <div class="demo" id="demo">
+    <div class="demo-head">
+      <div>
+        <div class="t">Demo controls</div>
+        <div class="s">Not product UI. Drives the prototype and narrates which rule fired.</div>
+      </div>
+      <button class="btn-ghost" id="demoClose" title="Hide panel" style="color:rgba(255,255,255,.5)">✕</button>
+    </div>
+    <div class="demo-scroll">
+      <div class="dgroup">
+        <div class="dlabel">Content state</div>
+        <div class="seg" id="segContent">
+          <button data-v="first">First-time</button>
+          <button data-v="returning">Returning</button>
+        </div>
+        <div class="dhint">First-time: Dashboards and Conversations show their empty state
+          (the header is where creation lives), Spaces still there, and Connected accounts
+          reads amber. Returning: three saved conversations, six accounts.</div>
+      </div>
+
+      <div class="dgroup">
+        <div class="dlabel">Program design</div>
+        <div class="seg" id="segCohort">
+          <button data-v="yes">Includes legacy</button>
+          <button data-v="no">No legacy</button>
+        </div>
+        <div class="dhint">Whether the org's <b>program design contains legacy elements</b> —
+          Candidly Core, SLEC, a premium legacy product. Deliberately <b>not</b> platform_access:
+          that field does not decide this, since a cait_only org can still hold a legacy
+          touchpoint if they bought one. No legacy elements → Spaces is omitted, not empty and
+          not disabled. <b>HR admin tools is unaffected either way</b> — employer administration
+          is a different axis again.</div>
+      </div>
+
+      <div class="dgroup">
+        <div class="dlabel">Role</div>
+        <div class="seg" id="segRole">
+          <button data-v="employee">Employee</button>
+          <button data-v="both">Employee + admin</button>
+        </div>
+        <div class="dhint">The navigation result after role and eligibility have already
+          resolved. Employer access adds a section — it is never a mode to switch into.</div>
+      </div>
+
+      <div class="dgroup">
+        <div class="dlabel">Session</div>
+        <button class="dbtn" id="btnRestore">↻ Simulate sign-in restore</button>
+        <button class="dbtn" id="btnReset">⤺ Reset session</button>
+        <div class="dhint">No localStorage anywhere — restore is simulated in memory.</div>
+      </div>
+
+      <div class="dgroup" style="margin-bottom:0">
+        <div class="dlabel" style="display:flex;justify-content:space-between;align-items:center">
+          <span>Rule log · newest first</span>
+          <button id="btnClearLog" style="font-size:9.5px;color:rgba(255,255,255,.4)">clear</button>
+        </div>
+        <div class="log" id="ruleLog"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="tipLayer" role="tooltip" aria-hidden="true"></div>
+<div id="paSlot"></div>
+<button class="demo-toggle" id="demoOpen">◧ Demo controls</button>
+
+<!-- ── MOBILE STUB — one screen only, per scope ─────────────── -->
+<div id="mobile">
+  <div class="m-top">
+    <span class="m-chip">Home <span class="m-count" id="mCount">1</span></span>
+    <span style="font-size:11.5px;color:var(--muted);margin-left:auto">No tab strip on mobile</span>
+  </div>
+  <div class="m-body">
+    <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#8F95A3" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>
+    </svg>
+    <div class="m-title">Works best on desktop</div>
+    <div class="m-copy">The tab model needs a wide viewport. On a phone, Cait shows one surface at a time — the current tab collapses to the chip above with a count of what's open.</div>
+  </div>
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════
+   ICONS — inline, no sprite sheet, no CDN.
+   ═══════════════════════════════════════════════════════════════ */
+const P = {
+  plus:'<path d="M12 5v14M5 12h14"/>',
+  newchat:'<path d="M21 12.5V15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h9"/><path d="M18 2v6M15 5h6"/>',
+  home:'<path d="M3 9.5 12 3l9 6.5V20a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"/><path d="M9 21v-7h6v7"/>',
+  book:'<path d="M2 4h6a3 3 0 0 1 3 3v13a2.5 2.5 0 0 0-2.5-2.5H2z"/><path d="M22 4h-6a3 3 0 0 0-3 3v13a2.5 2.5 0 0 1 2.5-2.5H22z"/>',
+  grid:'<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>',
+  wrench:'<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.8-3.8a6 6 0 0 1-7.9 7.9l-6.9 6.9a2.1 2.1 0 0 1-3-3l6.9-6.9a6 6 0 0 1 7.9-7.9l-3.8 3.8z"/>',
+  msg:'<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
+  bank:'<path d="M3 21h18M5 10v8M9.5 10v8M14.5 10v8M19 10v8M12 3 3 8h18z"/>',
+  user:'<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
+  panelClose:'<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/><path d="m16 15-3-3 3-3"/>',
+  panelOpen:'<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/><path d="m14 9 3 3-3 3"/>',
+  pin:'<path d="M12 17v5"/><path d="M9 10.8a2 2 0 0 1-1.1 1.8l-1.8.9A2 2 0 0 0 5 15.2V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.8a2 2 0 0 0-1.1-1.8l-1.8-.9A2 2 0 0 1 15 10.8V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"/>',
+  x:'<path d="M18 6 6 18M6 6l12 12"/>',
+  logout:'<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/>',
+  menu:'<path d="M3 6h18M3 12h18M3 18h18"/>',
+  down:'<path d="M12 3v12"/><path d="m7 11 5 5 5-5"/><path d="M4 21h16"/>',
+  search:'<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
+  plusSm:'<path d="M12 5v14M5 12h14"/>',
+  chevLeft:'<path d="m15 18-6-6 6-6"/>',
+  dots:'<circle cx="5" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="19" cy="12" r="1.4"/>',
+  trash:'<path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/>',
+  pencil:'<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>',
+  up:'<path d="m18 15-6-6-6 6"/>',
+  arrowUp:'<path d="m5 12 7-7 7 7"/><path d="M12 19V5"/>',   /* lucide arrow-up, verbatim */
+  chevRight:'<path d="m9 18 6-6-6-6"/>',
+  cap:'<path d="M22 10 12 5 2 10l10 5z"/><path d="M6 12v5c0 1.7 2.7 3 6 3s6-1.3 6-3v-5"/>',
+  percent:'<path d="M19 5 5 19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/>',
+  dollar:'<circle cx="12" cy="12" r="9"/><path d="M12 7v10M14.5 9.5c0-1.1-1.1-1.8-2.5-1.8s-2.5.7-2.5 1.8 1.1 1.6 2.5 1.9 2.5.8 2.5 1.9-1.1 1.8-2.5 1.8-2.5-.7-2.5-1.8"/>',
+  coins:'<ellipse cx="12" cy="6" rx="7" ry="3"/><path d="M5 6v6c0 1.7 3.1 3 7 3s7-1.3 7-3V6"/><path d="M5 12v6c0 1.7 3.1 3 7 3s7-1.3 7-3v-6"/>',
+  chevDown:'<path d="m6 9 6 6 6-6"/>',
+  chevUpDown:'<path d="m7 15 5 5 5-5M7 9l5-5 5 5"/>',
+  sparkle:'<path d="M12 3.5c.6 3.1 2.9 5.4 6 6-3.1.6-5.4 2.9-6 6-.6-3.1-2.9-5.4-6-6 3.1-.6 5.4-2.9 6-6z"/><path d="M5 3v3M3.5 4.5h3"/>',
+  building:'<path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18z"/><path d="M10 6h4M10 10h4M10 14h4M10 18h4"/><path d="M3 22h18"/>',
+  sliders:'<path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/>',
+  warn:'<path d="m10.3 3.9-8.2 14a2 2 0 0 0 1.7 3h16.4a2 2 0 0 0 1.7-3l-8.2-14a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/>',
+  ext:'<path d="M15 3h6v6M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>',
+  refresh:'<path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/>',
+  check:'<path d="m20 6-11 11-5-5"/>',
+  send:'<path d="m22 2-7 20-4-9-9-4z"/>',
+  layers:'<path d="m12 2 9 5-9 5-9-5z"/><path d="m3 12 9 5 9-5M3 17l9 5 9-5"/>',
+};
+/* Filled 24px glyphs for the Alert, matching filled/24/info, /check_circle, /warning and
+   /emergency. Drawn inline rather than linked from the Figma asset URLs because this file
+   has a hard no-network constraint — it opens offline from a Slack download — and those
+   URLs expire after seven days. Same shapes, evenodd knockouts for the counters. */
+const FILLED = {
+  info:    'M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z',
+  success: 'M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm-1.2 14.6-4.4-4.4 1.4-1.4 3 3 6-6L18.2 9l-7.4 7.6z',
+  warning: 'M12 2.6 22.6 21H1.4L12 2.6zM13 18h-2v-2h2v2zm0-4h-2v-4h2v4z',
+  error:   'M12 1.6 22.4 12 12 22.4 1.6 12 12 1.6zM13 17h-2v-2h2v2zm0-4h-2V7h2v6z',
+};
+function icoFill(n, s){
+  return '<svg width="'+(s||24)+'" height="'+(s||24)+'" viewBox="0 0 24 24" fill="currentColor"'
+    + ' fill-rule="evenodd" aria-hidden="true">' + (FILLED[n]||'').replace(/^/, '<path d="') + '"/></svg>';
+}
+
+/* One builder for every alert in the shell, so severity, geometry and the dismiss target
+   cannot drift between call sites. */
+function alertBox(severity, title, message, opts){
+  opts = opts || {};
+  return '<div class="alert alert-'+severity+'" role="'+(severity === 'error' ? 'alert' : 'status')+'"'
+    + (opts.style ? ' style="'+opts.style+'"' : '')+'>'
+    + '<span class="alert-ic">'+icoFill(severity, 24)+'</span>'
+    + '<div class="alert-body"><div class="alert-t">'+esc(title)+'</div>'
+    + '<div class="alert-m">'+esc(message)+'</div></div>'
+    + (opts.action
+        ? '<button class="alert-act"'+(opts.act ? ' data-act="'+opts.act+'"' : '')+'>'+esc(opts.action)+'</button>'
+        : '')
+    + (opts.dismiss
+        ? '<button class="alert-x" data-act="'+opts.dismiss+'" aria-label="Dismiss">'+ico('x',20)+'</button>'
+        : '')
+    + '</div>';
+}
+
+function ico(n, s, cls){
+  return '<svg class="'+(cls||'')+'" width="'+(s||16)+'" height="'+(s||16)+'" viewBox="0 0 24 24" fill="none"'
+    + ' stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">'
+    + (P[n]||'') + '</svg>';
+}
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+/* ═══════════════════════════════════════════════════════════════
+   NAV MODEL — real labels. This is the high-fidelity half.
+   ═══════════════════════════════════════════════════════════════ */
+const WHO = {name:'My account', email:'', initials:''};   /* research build: no name, no gender */
+const ORG = 'Acme Corp';
+/* Brand is data, not markup. White-labelling the shell is this object plus the :root palette —
+   nothing else in the file names the product, the vendor or the customer. */
+const BRAND = {product:'Cait', by:'by Candidly'};
+document.getElementById('sbWord').textContent = BRAND.product;
+document.getElementById('sbBy').textContent   = BRAND.by;
+
+/* ONE hierarchy. Employer-admin access is not a mode the user switches into — it adds
+   a section of employer destinations to the same sidebar. That is what the ticket means
+   by "separate destinations rather than two modes", and it removes the ambiguity of a
+   chip that silently changed what every list in the sidebar meant. */
+const PRIMARY = {
+  newchat: {id:'new-chat', label:'New chat', icon:'newchat', kind:'newchat'},
+  home:    {id:'home',     label:'Home',     icon:'home',    kind:'fixed', fixedId:'home'},
+  memory:  {id:'memory',   label:'Memory',   icon:'book',    kind:'memory'},
+};
+/* Dashboards exist only because a conversation produced one, so the seeds read like
+   answers somebody kept rather than like reports somebody configured. */
+const SEED_DASH = [
+  /* Seeded with their source, like a real one: a dashboard only exists because a
+     conversation produced it, so a returning user's dashboards can always get back to the
+     thread. Without this the "Open the conversation" control was unreachable in review
+     unless you pinned one first. */
+  {id:'d-payoff', label:'Loan C payoff plan', from:'c-refi',  fromLabel:'Refi math for Loan C'},
+  {id:'d-spend',  label:'Where April went',   from:'c-april', fromLabel:'April spend snapshot'},
+];
+const SEED_CONV = [
+  {id:'c-subs',  label:'Subscription Audit'},
+  {id:'c-refi',  label:'Refi math for Loan C'},
+  {id:'c-april', label:'April spend snapshot'},
+];
+const ADMIN_CONV = [
+  {id:'ac-dip',   label:'Q3 enrollment dip'},
+  {id:'ac-cens',  label:'Census upload errors'},
+  {id:'ac-renew', label:'Renewal packet review'},
+];
+/* The sidebar renders navFor(), never raw data: role, content state and
+   program design are filters over one hierarchy. Nothing forks. */
+/* Saved items are renameable, reorderable and deletable, so every row from a saved list
+   is tagged with the list it came from. */
+const mut = (arr, list) => arr.map(i => ({...i, mutable:true, list}));
+
+/* OPEN is the default: a sidebar that hides the user's own work behind three disclosures
+   makes them work to see what they made. The map records what they chose to shut. */
+const isShut = g => !!S.shut[g.label];
+
+/* The rail shows the five most recent of a created list and nothing more. Both lists are
+   unbounded by nature, and a sidebar that grows without limit stops being navigable —
+   the rest lives on the group's own index page. */
+/* CAP: five per section, and never cap to hide a single row.
+   Five is the conventional depth for a secondary list (Gmail's labels, Slack's "Show more")
+   and it is what the fold allows: every row costs ~28px, so at a cap of ten with both created
+   lists full, Spaces lands ~700px down and falls under the fold on a 13" laptop.
+   The MIN rule matters as much as the cap: with six items, showing five plus a "Show all"
+   row hides one row and spends one row on the control — a net gain of nothing, plus a click.
+   So a section only caps when doing so actually saves rows. */
+const RAIL_CAP = 5;
+const CAP_WORTH_IT = 2;   /* hide at least this many rows, or do not bother */
+function capped(g){
+  const total = g.items.length;
+  const open = !!S.showAll[g.label];
+  const capBites = total - RAIL_CAP >= CAP_WORTH_IT;
+  /* capBites tells the renderer whether a control belongs here at all — without it, a
+     six-item section showed all six AND a "Show fewer" row that had nothing to fold away. */
+  if(!capBites) return {...g, total, open:true, capBites:false, items:g.items, hiddenCount:0};
+  return {...g, total, open, capBites:true,
+          items: open ? g.items : g.items.slice(0, RAIL_CAP),
+          hiddenCount: open ? 0 : total - RAIL_CAP};
+}
+
+function navFor(){
+  /* TWO experiences. An admin is also an employee, so "admin only" was a variant that does
+     not exist in practice — that user gets the employee experience plus HR admin tools, which
+     is exactly the second variant. Admin access ADDS one row and changes nothing else. */
+  const employee = true;
+  const admin    = S.role === 'both';
+  /* Legacy elements in the program design, governing the EMPLOYEE experience only: with none
+     there is no legacy employee destination, so the Spaces group is omitted. Employer
+     administration is a separate axis again and is NOT gated on it — an admin administers their
+     org whether or not the program carries legacy elements. */
+  const legacy   = S.hasLegacy;
+
+  /* New chat is the only verb, and Home is the landing. Memory is neither: it is what
+     Cait knows about you, so it sits with Connected accounts at the bottom rather than
+     reading as Home's twin. */
+  /* TWO LAYOUTS, one hierarchy underneath. Both obey every role, both content states and
+     both program designs — the option changes where the provided entry points sit and
+     how granular they are, nothing else.
+       A · entry points are GROUPS below the divider: Spaces holds Student debt and
+           College planning, Acme Corp holds Employees. Granular; the areas are visible
+           without a click.
+       B · entry points are single ROWS above the divider, one per product, so the divider
+           separates everything Candidly provides from everything the user made. Fewer rows,
+           and the provenance split becomes the structure. */
+  /* ── SIDEBAR IA, as decided in review ──────────────────────────────────────
+     Top group      : Home · New chat · Memory · HR admin tools
+     Work areas     : Dashboards → Conversations → Spaces
+     Setup cluster  : Organization settings · Connected accounts · Settings · account
+
+     Two decisions worth keeping the reasoning for, because both reverse an earlier one:
+     · Spaces sits BELOW the two created lists, at the same IA level. It gives up
+       the anchored position it had above them; the section cap is what keeps it reachable.
+     · The admin entry left the middle of the sidebar for the top group, beside Memory. It
+       is a work destination, not a setting, so it does not belong in the setup cluster
+       either — and as a single row it no longer needs a section header of its own. */
+  const adminEntry = {id:'at-emp', label:'HR admin tools', icon:'building', kind:'tools', admin:true, widget:true};
+  const primary = [PRIMARY.home, PRIMARY.newchat,
+    ...(employee ? [PRIMARY.memory] : []),
+    ...((admin && S.adminSpot === 'top') ? [adminEntry] : [])];
+
+  const groups = [];
+
+  /* Dashboards and Conversations are peers: both are things the user made, both appear only
+     once they exist. Both are capped, so neither can push what sits below it off the fold —
+     which is now the point, because Spaces is what sits below them. */
+  /* Both sections are ALWAYS present, empty included. The convention says user-created
+     collections appear once something exists — but the header is where creation lives, so
+     hiding it on day one hides the `+` that starts the first one, and a first-time sidebar
+     that shows only what someone else provided says nothing about what this product is for.
+     Empty is a state with copy, not an absence. */
+  const dashItems = mut(S.saved.dash, 'dash');
+  groups.push(capped({label:'Dashboards', icon:'grid', kind:'dashboard', items:dashItems,
+    create:'dash', createTitle:'New dashboard'}));
+
+  const convItems = mut(S.saved.conv, 'conv');
+  groups.push(capped({label:'Conversations', icon:'msg', kind:'chat', items:convItems,
+    create:'conv', createTitle:'New chat'}));
+
+  /* ONE widget entry for launch — Student debt. College planning is not a second entry yet;
+     the section header is what makes room for more later, and it has to be descriptive enough
+     that a user who opened the widget once can find it again. */
+  if(employee && legacy){
+    groups.push({label:'Spaces', icon:'layers', kind:'space', provided:true, items:[
+      {id:'sp-debt', label:'Student debt', icon:'percent', kind:'tools', widget:true},
+    ]});
+  }
+
+  /* THIRD placement for the admin destinations: their own provided section, below Candidly
+     Spaces and built the same way — because it is the same kind of thing. Both are areas of
+     someone else's product reached from this sidebar, so both should be a category whose
+     children are the product's own entry points rather than one row that opens a product and
+     leaves you to navigate it.
+     The children mirror the admin product's nav exactly: Employees and Resource centre. That
+     is also why this variant does not lose a destination — the row that used to say "HR admin
+     tools" becomes the Employees child, since the section header now carries that name. */
+  if(admin && S.adminSpot === 'section'){
+    /* ONE child, Resource centre. Employees is not lost by leaving it out: the admin
+       product's own nav still lists it, and the widget opens with its nav visible — the
+       shell links to the product, the product handles its own rooms. Same reasoning that
+       gave Spaces one entry for launch rather than one per screen. */
+    groups.push({label:'HR admin tools', icon:'building', kind:'tools', provided:true, items:[
+      {id:'at-res', label:'Resource centre', icon:'book', kind:'tools', widget:true, admin:true},
+    ]});
+  }
+
+  /* Setup cluster: what Cait reads, then how it behaves. Organization settings is gone —
+     an admin's org-wide configuration lives inside the admin product, so a second door to it
+     from the shell was a duplicate of something we do not own.
+     ADMIN PLACEMENT is a variant, because the review left it open: HR admin tools either sits
+     in the top group with the other destinations, or down here where org-scoped things used
+     to be. It is the same row either way; only its neighbours change. */
+  /* HR admin tools leads the cluster when it sits here — it is a destination, and the two
+     rows under it are setup. Putting it last read as an afterthought below the settings. */
+  const footer = [
+    ...((admin && S.adminSpot === 'bottom') ? [adminEntry] : []),
+    ...(employee ? [{id:'accounts', label:'Connected accounts', icon:'bank', kind:'accounts',
+        status: S.content === 'first' ? 'none' : 'ok',
+        tip: S.content === 'first' ? 'Connected accounts — none yet' : 'Connected accounts — 6 connected'}] : []),
+    {id:'settings', label:'Settings', icon:'sliders', kind:'settings'},
+  ];
+  return {who:WHO, primary, groups, footer};
+}
+
+/* navItem() resolves live saved items first, then the static destinations, so a renamed
+   dashboard resolves to its new label and a brand-new one resolves at all. */
+function navItem(id){
+  for(const list of ['dash','conv','adminConv']){
+    const hit = S.saved[list].find(i => i.id === id);
+    if(hit) return {...hit, kind: list === 'dash' ? 'dashboard' : 'chat',
+                    icon: list === 'dash' ? 'grid' : 'msg', list};
+  }
+  /* Then the LIVE nav model, before the static table. A destination's label can depend on
+     where it sits — inside the HR admin tools section the admin destination reads "Employees",
+     because the section header already carries the other name — and a tab that takes its name
+     from the static table instead would show a label the sidebar never displayed. navFor() is
+     the source of nav truth, so it is what gets asked. */
+  const N = navFor();
+  const live = [...N.primary, ...N.footer, ...N.groups.flatMap(g => g.items)].find(i => i.id === id);
+  if(live) return {...NAVX[id], ...live};
+  return NAVX[id];
+}
+
+/* flat lookup for the destinations that are not user-created. */
+const NAVX = {};
+[PRIMARY.newchat, PRIMARY.home, PRIMARY.memory,
+ {id:'sp-budget',  label:'Budgeting',        kind:'space', icon:'coins'},
+ {id:'sp-retire',  label:'Retirement',       kind:'space', icon:'layers'},
+ {id:'sp-candidly', label:'Spaces', kind:'tools', icon:'layers'},
+ {id:'sp-debt', label:'Student debt',   kind:'tools', icon:'percent'},
+ {id:'at-emp',  label:'HR admin tools', kind:'tools', icon:'building', admin:true, adminNav:'Employees'},
+ {id:'at-res',  label:'Resource centre', kind:'tools', icon:'book',     admin:true, adminNav:'Resource Center'},
+ {id:'accounts', label:'Connected accounts', kind:'accounts', icon:'bank'},
+ {id:'settings',    label:'Settings', kind:'settings', icon:'sliders'},
+].forEach(i => NAVX[i.id] = i);
+
+/* ═══════════════════════════════════════════════════════════════
+   STATE — in memory only. No localStorage (it fails when this file
+   is embedded in some review surfaces).
+   ═══════════════════════════════════════════════════════════════ */
+/* ONE pattern for the whole product, the one Notion and Replit both settle on: selecting a
+   destination navigates the tab you are in; ⌘/Ctrl-click opens a second tab. No pinning, no
+   promotion, no replaceable-versus-permanent distinction to learn — the answer to "will this
+   replace what I am looking at?" is always yes unless you asked for a new tab. */
+const MAX_VISIBLE_TABS = 6;
+let UID = 0, SEQ = 0, LOGN = 0;
+
+/* TWO tabs on arrival, neither closable. They are the shell's two ways in — the plan you
+   already have, and the way to ask for anything else — so they are not documents you opened
+   and might be done with. Everything else is still a tab you open and close; these are the
+   floor under them. `fixed` is what says so, and it is the only thing that distinguishes
+   them: no pinning gesture, no promotion, nothing to learn. */
+function startTabs(){
+  return [
+    {uid:'tb-home-'+(++UID), navId:'home', label:'Home', icon:'home', kind:'home',
+     fixed:true, lastFocus:++SEQ, hidden:false},
+    {uid:'tb-ask-'+(++UID),  navId:'ask',  label:'Ask Cait', icon:'sparkle', kind:'chat',
+     fixed:true, lastFocus:++SEQ, hidden:false},
+  ];
+}
+/* First-time and returning differ in what the user has created, so they differ in the
+   DATA. Filtering only at render time let the index page contradict the rail. */
+function seedSaved(returning){
+  return returning
+    ? {dash: SEED_DASH.map(i => ({...i})), conv: SEED_CONV.map(i => ({...i})),
+       adminConv: ADMIN_CONV.map(i => ({...i}))}
+    : {dash:[], conv:[], adminConv:[]};
+}
+
+function mkCtx(){ const t = startTabs(); return {tabs:t, activeUid:t[0].uid}; }
+
+const S = {
+  /* One of three navigation results after role + eligibility have already resolved:
+     employee | both | admin. Not a mode the user toggles in the product. */
+  role:'employee',
+  /* The widget's own load and failure states are out of scope for this review, so the
+     control that switched between them is gone. The render paths stay — a failing widget
+     is still a state this shell has to hold — and this is the value they run at. */
+  toolsState:'ready',
+  /* Does the org's PROGRAM DESIGN contain legacy elements? Deliberately not platform_access:
+     that field does not decide it, because a cait_only org can still hold a legacy touchpoint
+     if they purchased Candidly Core or a premium legacy product like SLEC. What the shell needs
+     to know is only whether legacy elements exist in the program, since that is what puts a
+     widget entry in the sidebar. With none, the Spaces group is omitted rather than emptied. */
+  hasLegacy:true,
+  /* First-time vs returning. Both are content states over ONE hierarchy. */
+  content:'first',   /* research build: testers arrive first-time, so Memory seeds from the priority screen only (memSeedFirst) rather than a returning user's history. ?state=returning switches it. */
+  userCollapsed:false,
+  /* The Tools auto-collapse is a default, not a lock. Once the user expands the host
+     sidebar while a Tools tab is focused, both navs stay open for the rest of the
+     session — the shell stops second-guessing a choice the user already made. */
+  /* The embedded product's own nav is DERIVED, not stored — see embedOpen(). Open when
+     it is the only full-height nav on screen, tucked behind the product's own Menu
+     button when the host sidebar is open too, because 260 + 248 of chrome leaves the
+     canvas nothing on a 1280 laptop.
+     null = no explicit choice yet; true/false = the user overrode the derivation. */
+  embedNavUser:null,
+  shell:mkCtx(),   /* ONE tab strip. There is no second context to keep one for. */
+  /* User-created content. The rail is written to, not just read from: New chat and
+     dashboard creation add here, and rows can be renamed, reordered and deleted. */
+  saved:seedSaved(true),
+  paOpen:false,    /* the persistent assistant's expanded state */
+  renaming:null,
+  /* 'landing' = the sidebar's New chat / the fixed Ask Cait tab. 'conv' | 'dash' = arrived
+     from a category `+`, which reframes the question and drops the front-door furniture. */
+  askFor:'landing',
+  /* SETTLED: HR admin tools is the single row in the bottom cluster, and the control that
+     switched arrangements is gone from the panel — there is one arrangement to review.
+     'top' and 'section' are PARKED, not deleted: both branches are still in navFor() and
+     the Resource centre canvas is still in the file, so setting this value in the console
+     brings either back. Archived rather than thrown away, because the section shape is the
+     answer again the moment there is a second admin destination to hold. */
+  adminSpot:'bottom', /* where HR admin tools sits: 'top' group or 'bottom' cluster */
+  showAll:{},      /* per-section: the user asked to see past the cap */
+  /* Every group ships shut, in every variant. One format across the board means the
+     sidebar opens at a fixed height no matter the role, the program design or how
+     much the user has saved — the shape of the nav stops depending on the contents. Only
+     an explicit expand is remembered, so this map holds `false`, not `true`. */
+  shut:{},
+  log:[],
+  ovfMenuOpen:false,
+  sinceDismissed:false,
+};
+
+const C   = () => S.shell;
+const TABS= () => C().tabs;
+const ACT = () => TABS().find(t => t.uid === C().activeUid);
+const toolsTab = () => (ACT() && ACT().kind === 'tools') ? ACT() : TABS().find(t => t.kind === 'tools');
+/* Tab order is the user's, full stop — nothing re-sorts behind them. */
+function normalize(){}
+
+/* ═══════════════════════════════════════════════════════════════
+   RULE LOG — how the model gets reviewed without reading a spec.
+   ═══════════════════════════════════════════════════════════════ */
+function logRule(rule, detail, kind){
+  S.log.unshift({n:++LOGN, rule, detail:detail||'', kind:kind||'rule'});
+  if(S.log.length > 60) S.log.pop();
+  renderLog();
+}
+function renderLog(){
+  document.getElementById('ruleLog').innerHTML = S.log.map(e =>
+    '<div class="log-item" data-kind="'+e.kind+'"><div class="r">'+esc(e.rule)+'</div>'
+    + (e.detail ? '<div class="d">'+esc(e.detail)+'</div>' : '')
+    + '<div class="n">#'+e.n+'</div></div>').join('')
+    || '<div class="dhint" style="margin:0">Interact with the sidebar or tabs — each rule that fires is named here.</div>';
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   TAB ENGINE
+   ═══════════════════════════════════════════════════════════════ */
+function focusTab(uid, why){
+  const t = TABS().find(x => x.uid === uid);
+  if(!t) return;
+  if(t.hidden){ t.hidden = false; logRule('Recalled from overflow', '“'+t.label+'” returns with its state intact — overflow hides, it never closes.', 'block'); }
+  C().activeUid = uid;
+  t.lastFocus = ++SEQ;
+  if(why) logRule(why.rule, why.detail, why.kind);
+  syncRail();
+  render();
+}
+
+function closeTab(uid, quiet){
+  const list = TABS(), i = list.findIndex(t => t.uid === uid);
+  if(i < 0) return;
+  const t = list[i];
+  /* Belt and braces: the control is absent, and the operation refuses. Anything that can
+     close a tab — a menu, a shortcut, a future gesture — gets the same answer. */
+  if(t.fixed){
+    if(!quiet) logRule('“'+t.label+'” stays', 'Home and Ask Cait are the two ways into the shell, so they are not closable. Everything else is.');
+    return;
+  }
+  /* The strip can never be empty. Closing the only tab sends it Home instead — the same
+     place a new session starts, so there is no state where the canvas has nothing in it. */
+  if(list.length === 1){
+    Object.assign(t, {navId:'home', label:'Home', icon:'home', kind:'home', family:null, lastFocus:++SEQ});
+    if(!quiet) logRule('Last tab went Home', 'Closing the only tab would leave nothing on screen, so it navigates to Home instead. The strip always holds at least one tab.');
+    syncRail(); render(); return;
+  }
+  const wasActive = C().activeUid === uid;
+  list.splice(i, 1);
+  if(!quiet){
+    const saved = !!savedOf(t.navId);
+    logRule('Tab closed', '“'+t.label+'” — focus moves to the tab on its left.'
+      + (saved ? ' The conversation stays in the sidebar: closing a tab puts work away, it never deletes it.' : ''));
+  }
+  if(wasActive){
+    const vis = ordered().filter(x => !x.hidden);
+    const left = vis[Math.max(0, Math.min(i, vis.length) - 1)] || vis[0];
+    if(left){ C().activeUid = left.uid; left.lastFocus = ++SEQ; }
+  }
+  syncRail(); render();
+}
+
+function ordered(){ normalize(); return TABS(); }
+
+/* ONE rule, and every sidebar row obeys it: selecting opens a tab; selecting something
+   already open focuses that tab. No states, no promotion, no gesture to learn — the strip is
+   simply the list of what you have open, the way an editor's is.
+   The cost, stated plainly: the strip accumulates, so the cap and the +n overflow are what
+   keep it usable rather than anything clever in the selection rule. */
+function openNav(navId, opts){
+  opts = opts || {};
+  const item = navItem(navId);
+  if(!item) return;
+
+  /* Home is the one sidebar destination that leaves this simulated tab-strip
+     entirely — it is the real signed-in workspace, not a skeleton canvas this
+     shell can render, so it is real page navigation rather than another tab. */
+  if(item.kind === 'fixed' && item.fixedId === 'home'){
+    window.location.href = 'home-desktop.html';
+    return;
+  }
+
+  /* New chat is a destination like the rest: the Ask Cait landing. */
+  /* The sidebar's New chat is the conversation path. The category + sets S.askFor first and
+     routes through here, so the two entry points share one screen and one code path. */
+  /* Three ways onto one screen, and they are not the same screen. The sidebar's New chat is
+     the product's front door — greeting, wordmark, goal deck. A category `+` is creation in
+     context: the same composer with the question reframed and none of the front-door
+     furniture, because the user already said what they were making. */
+  if(item.kind === 'newchat' && !opts.fromCategory) S.askFor = 'landing';
+  const dest = item.kind === 'newchat'
+    ? {navId:'ask', label:'Ask Cait', icon:'sparkle', kind:'chat'}
+    : {navId, label:item.label, icon:item.icon, kind:item.kind};
+  /* A widget destination carries which product it embeds, so the canvas knows which nav to
+     draw. Everything else clears it. */
+  dest.family = item.kind === 'tools' ? (item.admin ? 'admin' : 'employee') : null;
+
+  const existing = TABS().find(t => t.navId === dest.navId);
+  if(existing){
+    focusTab(existing.uid, {rule:'Already open — focused',
+      detail:'“'+existing.label+'” is open in another tab, so nothing was added. Nothing is ever open twice.'});
+    return;
+  }
+
+  const nt = {uid:'tb-'+(++UID), ...dest, lastFocus:++SEQ, hidden:false, loaded:true};
+  TABS().push(nt); C().activeUid = nt.uid;
+  logRule('Opened in a tab',
+    '“'+dest.label+'” opened as its own tab. Nothing was replaced, so whatever you were reading is still there to come back to'
+    + (TABS().length > MAX_VISIBLE_TABS ? ' — and past '+MAX_VISIBLE_TABS+' visible tabs the least recently used one steps into +n rather than closing.' : '.'));
+  syncRail(); render();
+}
+
+/* Overflow: least recently focused kept tab steps aside. Never the focused
+   tab, never a fixed tab, never the Tools tab while its session is live. */
+function evictable(){
+  /* Never the tab you are in, never a FIXED tab — hiding Home or Ask Cait into +n would put
+     the two entry points behind a menu, which is the opposite of what they are for — and
+     never an embedded session while it is live, since hiding a widget tab would end a session
+     the shell cannot inspect. */
+  return ordered().filter(t => !t.hidden && !t.fixed && t.uid !== C().activeUid && !(t.family && t.loaded))
+    .sort((a,b) => a.lastFocus - b.lastFocus);
+}
+/* Overflow is TWO-WAY. Hiding when there is no room was only half of it: closing a tab
+   frees a slot, and a hidden tab should come back into the strip rather than leaving a gap
+   with a +n badge beside it. Most recently used returns first, since that is the one the
+   user is most likely to want back. */
+function reflowOverflow(){
+  const act = ACT(); if(act) act.hidden = false;
+  let guard = 0;
+  while(ordered().filter(t => !t.hidden).length > MAX_VISIBLE_TABS && guard++ < 20){
+    const victim = evictable()[0]; if(!victim) break;
+    victim.hidden = true;
+    logRule('Moved to overflow', '“'+victim.label+'” was the least recently focused tab — past '+MAX_VISIBLE_TABS+' visible tabs it steps into the +n control. Hidden, not closed.', 'block');
+  }
+  fillFromOverflow();
+}
+
+function fillFromOverflow(){
+  let guard = 0;
+  while(ordered().filter(t => !t.hidden).length < MAX_VISIBLE_TABS && guard++ < 20){
+    const back = ordered().filter(t => t.hidden).sort((a,b) => b.lastFocus - a.lastFocus)[0];
+    if(!back) break;
+    back.hidden = false;
+    RECALLED.push(back.label);
+  }
+}
+/* Collected during reflow and narrated once, so closing one tab does not produce a rule
+   entry per returning tab. */
+let RECALLED = [];
+
+/* ═══════════════════════════════════════════════════════════════
+   RAIL — the host sidebar answers to the user and nothing else.
+   Opening an embedded product does NOT take it away: the shell's own
+   navigation is what a user needs most at the moment they step into
+   someone else's application, so it stays, and the PRODUCT's nav is
+   the one that arrives tucked behind its Menu button.
+   ═══════════════════════════════════════════════════════════════ */
+const isRailed = () => document.body.dataset.rail === '1';
+function syncRail(){
+  const next = S.userCollapsed;
+  if(next !== (document.body.dataset.rail === '1')) document.body.dataset.rail = next ? '1' : '0';
+}
+
+/* One full-height nav at a time, and the host's wins by default: the product's own nav
+   opens only while the Cait sidebar is collapsed to its rail. An explicit toggle beats the
+   derivation and keeps beating it — both navs at once is available, it is just never what
+   someone gets handed. */
+function embedOpen(){
+  if(S.embedNavUser !== null) return S.embedNavUser;
+  return document.body.dataset.rail === '1';
+}
+const px = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+
+/* ═══════════════════════════════════════════════════════════════
+   RENDER — SIDEBAR
+   ═══════════════════════════════════════════════════════════════ */
+function navRow(item, extra){
+  /* Renaming happens in place, in the rail, so the change is visible where it lands. */
+  if(item.mutable && S.renaming === item.id){
+    return '<div class="nav-wrap"><input class="nav-input" data-rename="'+item.id+'" value="'
+      + esc(item.label)+'" aria-label="Rename" /></div>';
+  }
+  /* The destination a row opens, resolved the same way openNav() resolves it — one rule in
+     two places was the bug, so this is the rule. */
+  const destId = item.kind === 'newchat' ? 'ask' : item.id;
+  const openTab = TABS().find(t => t.navId === destId
+    || (item.kind === 'tools' && t.kind === 'tools' && t.navId === destId));
+  const isActive = !!(openTab && openTab.uid === C().activeUid);
+
+  /* In the rail the label is gone, so the row needs one: data-tip routes it through the
+     shell's own tooltip layer. Expanded, the label is right there and a tooltip on every
+     row would be noise — so the native `title` covers the one case that remains, a name
+     too long for 260px. Never both at once: two tooltips for one row is worse than none. */
+  const rail = isRailed();
+  const row = '<button class="nav" data-nav="'+item.id+'"'
+    /* `page` rather than `true`: this is navigation, and `page` is the value that says
+       "this row is the view you are looking at". */
+    + (isActive ? ' aria-current="page"' : '')
+    /* A row carrying a status keeps its tooltip in BOTH states: the dot is the only signal
+       on a first visit, and a colour cannot say "not yet". Every other row is tooltip-free
+       when expanded — a label that is already on screen does not need explaining. */
+    + (rail
+         ? ' data-tip="'+esc(item.tip || item.label)+'" aria-label="'+esc(item.tip || item.label)+'"'
+         : (item.tip
+              /* data-tip-fixed keeps markTruncated() from clearing it: that pass owns the
+                 tooltips it created for cut-off labels, not one that carries state. */
+              ? ' data-tip="'+esc(item.tip)+'" data-tip-fixed="1" aria-label="'+esc(item.tip)+'"'
+              : '')) + '>'
+    + (item.icon ? '<span class="ic">'+ico(item.icon,16)+'</span>' : '')
+    + '<span class="lbl">'+esc(item.label)+'</span>'
+    + (extra||'')
+    /* One corner, one indicator: in the rail a row carrying a status dot does not also get
+       the open-tab dot, because they occupy the same 6px. Expanded, both show — different
+       columns, different meanings. */
+    + (openTab && !(rail && /dot-status/.test(extra||'')) ? '<span class="dot"></span>' : '')
+    + '</button>';
+  if(!item.mutable) return row;
+  /* A nested button inside a button is invalid markup, so the control is a sibling. */
+  return '<div class="nav-wrap">'+row
+    + '<button class="nav-more" data-more="'+item.id+'" data-tip="Rename, move, delete"'
+    + ' aria-label="Rename, move or delete '+esc(item.label)+'">'+ico('dots',16)+'</button></div>';
+}
+
+/* Long titles are a certainty, not a defect: no sidebar width makes "Should I refinance my
+   student loans this year?" fit. So the answer is to truncate and explain — but only where
+   there is something to explain. Measured after layout, since it depends on the text. */
+function markTruncated(){
+  if(isRailed()) return;                     /* the rail labels every row already */
+  /* Only at rest. render() also runs mid-collapse, when the sidebar is still animating
+     through 52px and EVERY label is legitimately too narrow — measuring there marked the
+     whole sidebar as truncated and left it that way, since nothing re-measured afterwards. */
+  const sb = document.querySelector('.sidebar');
+  if(sb.getBoundingClientRect().width < parseInt(px('--sidebar-w')) - 4) return;
+  const r = document.createRange();
+  for(const l of document.querySelectorAll('#sbScroll .lbl,#sbFoot .lbl')){
+    const row = l.closest('.nav'); if(!row || row.dataset.tipFixed) continue;
+    r.selectNodeContents(l);
+    /* Text width vs the box it has to fit in — scrollWidth on a flex item reports the box. */
+    if(Math.ceil(r.getBoundingClientRect().width) > l.clientWidth) row.dataset.tip = l.textContent;
+    else delete row.dataset.tip;
+  }
+}
+/* The width transition is when the answer changes, so re-measure when it finishes. */
+document.querySelector('.sidebar').addEventListener('transitionend', e => {
+  if(e.propertyName === 'width') markTruncated();
+});
+window.addEventListener('resize', markTruncated);
+
+function renderSidebar(){
+  const N = navFor();
+
+  let h = '';
+  h += N.primary.map(i => navRow(i)).join('');
+  /* No dangling rule: a first-time user with no legacy elements has nothing below it. */
+  if(N.groups.length) h += '<div class="rule"></div>';
+  N.groups.forEach((g,gi) => {
+    /* Any tab open from this group lights the rail icon, since the items vanish there. */
+    const liveHere = g.items.some(i => TABS().some(t => t.navId === i.id && t.uid === C().activeUid));
+    /* Disclosure is one control with one meaning on every group. The LABEL is the
+       group's own destination where it has one (created lists have an index page), and a
+       toggle where it does not — so no header is ever a dead end. */
+    if(g.index && !g.items.length){
+      /* Nothing to expand, so no disclosure and no zero — one plain row that routes to the
+         index, where the templates and the create path live. */
+      h += navRow({id:'__index-'+g.index, label:g.label, icon:g.icon, kind:'index', index:g.index});
+      if(gi < N.groups.length-1) h += '<div style="height:4px"></div>';
+      return;
+    }
+    /* A section with nothing in it draws the COLLAPSED chevron whatever S.shut says. A
+       down-chevron means "open, and here is what is inside" — pointing it down over nothing
+       is the disclosure lying about its own contents. Empty is not a remembered state either,
+       so it does not touch S.shut: the moment one row exists the section is open, because
+       that is the default, and the user never had to do anything to get there. */
+    const empty = g.total === 0;
+    const shut = empty || isShut(g);
+    /* THE WHOLE HEADER TOGGLES. Clicking a group's name to expand it is the universal
+       expectation, and having the label open a page instead made the disclosure read as
+       broken — which is exactly how it was reported. The index page keeps its own control on
+       the trailing edge, where it cannot be hit by accident.
+       Employer, provided and created groups render identically otherwise: scope is carried
+       by the label, not by a different weight or tint. */
+    /* Header row, standard disclosure pattern: twisty on the LEFT, label beside it, actions on
+       the trailing edge where they cannot be hit by accident. The whole label area stays
+       clickable, so the twisty is a target rather than the only target. */
+    h += '<div class="grp-head'+(shut ? ' shut' : '')+(empty ? ' empty' : '')+'">'
+       + '<button class="grp" data-toggle="'+esc(g.label)+'" aria-expanded="'+(shut?'false':'true')+'">'
+       + '<span class="grp-tog">'+ico('chevDown',14)+'</span>'
+       + '<span class="gic">'+ico(g.icon,14)+'</span>'
+       + '<span class="grp-lbl">'+esc(g.label)+'</span>'
+       + (shut && !empty ? '<span class="grp-count">'+(g.total || g.items.length)+'</span>' : '')
+       + (shut && liveHere ? '<span class="dot grp-dot"></span>' : '')
+       + '</button>'
+       /* Creation sits on the category it creates into. Both paths open the same Ask Cait
+          screen — a dashboard stays conversation-born, so there is no blank-dashboard route —
+          and the dashboard path changes that screen's header, not the mechanism. */
+       + (g.create
+            ? '<button class="grp-act" data-create="'+g.create+'" data-tip="'+esc(g.createTitle||'')+'"'
+              + ' aria-label="'+esc(g.createTitle||'')+'">'+ico('plus',16)+'</button>'
+            : '')
+       + '</div>';
+    /* The section's whole contents collapse to this one icon, so its tooltip says the count
+       as well as the name — "Dashboards · 2" is the only thing on screen standing in for two
+       rows the user cannot see. */
+    /* This button never shows a label in any state, so its name has to be given. */
+    const cnt = g.total || g.items.length;
+    h += '<button class="nav grp-icon" data-grp="'+esc(g.label)+'"'
+       + (liveHere ? ' aria-current="page"' : '')
+       + ' aria-label="'+esc(g.label)+', '+cnt+' item'+(cnt === 1 ? '' : 's')+' — expand the sidebar"'
+       + (isRailed() ? ' data-tip="'+esc(g.label)+' · '+(g.total || g.items.length)+'"' : '')
+       + '><span class="ic">'+ico(g.icon,16)+'</span></button>';
+    h += '<div class="grp-items'+(shut ? ' shut' : '')+'">'
+       + (g.items.length
+            ? g.items.map(i => navRow({...i, kind:i.kind || g.kind, icon:null})).join('')
+            /* Nothing. A created section that is empty shows its header and stops — the
+               structure is what teaches the shape of the product, and a placeholder row
+               teaches nothing while occupying the space of real content. Slack's empty
+               sections read exactly this way. The `+` on the header is the way in, and it
+               is made permanent while the section is empty. */
+            : (g.create ? '' : '<div class="nav-empty">'+esc(g.empty || 'Nothing here yet')+'</div>'))
+       + (g.hiddenCount
+            ? '<button class="nav nav-more-row" data-showall="'+esc(g.label)+'">'
+              + '<span class="lbl">Show all '+g.total+'</span>'
+              + '<span class="grp-go">'+ico('chevDown',14)+'</span></button>'
+            : (g.open && g.capBites
+                ? '<button class="nav nav-more-row" data-showall="'+esc(g.label)+'">'
+                  + '<span class="lbl">Show fewer</span>'
+                  + '<span class="grp-go">'+ico('up',14)+'</span></button>'
+                : ''))
+       + '</div>';
+    if(gi < N.groups.length-1) h += '<div style="height:4px"></div>';
+  });
+  h += '<div style="height:16px"></div>';
+  document.getElementById('sbScroll').innerHTML = h;
+
+  const who = N.who;
+  /* HR admin tools is a different KIND of thing from the two rows under it — a scope you
+     step into, not setup for this one — so it gets a rule beneath it rather than sitting in
+     the same flat list. Without it, it read as a third setting, which is exactly how it read.
+     The rule only exists when the row does. */
+  /* Amber when nothing is connected, green when something is. A DOT, not a word: the badge
+     read well but "Connected accounts" plus "Connect" does not fit 260px, and truncating the
+     row's own name to make room for its status is the wrong way round. No icon either — the
+     triangle is what turns a nudge into an alert. The words live in the tooltip and, properly,
+     on Home, where there is room for a sentence. */
+  /* dot-status, not dot: the trailing absolute column belongs to the open-tab indicator.
+     Both used `.dot`, so with a Connected accounts tab open the two landed on the same pixel
+     and the status colour was simply invisible underneath the blue one. */
+  const acctTrail = S.content === 'first'
+    ? '<span class="dot dot-status rail-dot" style="background:var(--warning)"></span>'
+    : '<span class="badge full-only">6</span>'
+      + '<span class="dot dot-status rail-dot" style="background:var(--success)"></span>';
+  document.getElementById('sbFoot').innerHTML =
+    N.footer.map(i => navRow(i, i.kind === 'accounts' ? acctTrail : '')
+      + (i.kind === 'tools' ? '<div class="rule foot-rule"></div>' : '')).join('')
+    + '<button class="acct" id="acctBtn" aria-haspopup="menu"'
+    + ' aria-label="'+esc(who.name)+' — account menu"'
+    + (isRailed() ? ' data-tip="'+esc(who.name)+' — account"' : '') + '>'
+    + '<span class="avatar">'+esc(who.initials)+'</span>'
+    + '<span class="who"><span class="nm">'+esc(who.name)+'</span><span class="em">'+esc(who.email)+'</span></span>'
+    + '<span class="acct-caret">'+ico('chevUpDown',14)+'</span>'
+    + '</button>';
+
+  /* One control, two directions: it says what it will do, not what state you are in. */
+  const railed = document.body.dataset.rail === '1';
+  const cb = document.getElementById('collapseBtn');
+  cb.innerHTML = ico(railed ? 'panelOpen' : 'panelClose', 16);
+  cb.setAttribute('aria-label', railed ? 'Expand sidebar' : 'Collapse sidebar');
+  cb.dataset.tip = railed ? 'Expand sidebar' : 'Collapse sidebar';
+  /* The mark expands the rail too, so in the rail it says so. Expanded it is decoration and
+     carries nothing. */
+  const lk = document.querySelector('.sb-lockup');
+  if(railed) lk.dataset.tip = 'Expand sidebar'; else delete lk.dataset.tip;
+  markTruncated();
+  cb.setAttribute('aria-expanded', railed ? 'false' : 'true');
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   RENDER — TAB STRIP
+   ═══════════════════════════════════════════════════════════════ */
+function toolsMarker(t){
+  if(t.kind !== 'tools') return '';
+  if(!t.loaded) return '<span class="marker" title="Not loaded yet" style="color:var(--muted)">'+ico('refresh',14)+'</span>';
+  if(S.toolsState === 'loading') return '<span class="marker spin" title="Loading"></span>';
+  if(S.toolsState === 'failed')  return '<span class="marker warn" title="Failed to load">'+ico('warn',14)+'</span>';
+  if(S.toolsState === 'blocked') return '<span class="marker warn" title="Blocked by the browser">'+ico('warn',14)+'</span>';
+  if(S.toolsState === 'expired') return '<span class="marker warn" title="Session expired">'+ico('warn',14)+'</span>';
+  return '';
+}
+
+function renderStrip(){
+  const strip = document.getElementById('strip');
+  const vis = ordered().filter(t => !t.hidden);
+  const hid = ordered().filter(t => t.hidden);
+
+  strip.innerHTML = vis.map(t => {
+    const on = t.uid === C().activeUid;
+    return '<div class="tab" role="tab" data-uid="'+t.uid+'"'
+      + ' aria-selected="'+(on?'true':'false')+'" draggable="true" title="'+esc(t.label)+'">'
+      + '<div class="tab-row">'
+      /* No leading icon. A tab is identified by its title; the icon repeated what the label
+         already said and put a second colour-carrying element next to it. The status marker
+         stays — it says something the label cannot. */
+      + toolsMarker(t)
+      + '<span class="lbl">'+esc(t.label)+'</span>'
+      /* A fixed tab has no close control — not a disabled one. An X you cannot use is a
+         worse answer than no X, because it invites the click that does nothing. */
+      + (t.fixed ? '' : '<button class="tab-btn" data-act="close" title="Close tab">'+ico('x',14)+'</button>')
+      + '</div><div class="underline"></div></div>';
+  }).join('')
+  + '<button class="ovf" id="ovfBtn" data-show="'+(hid.length?'1':'0')+'" title="Hidden tabs — still open, state intact">+'
+  + hid.length+'</button>';
+
+  fitStrip();
+  renderPA();
+}
+
+const PA_PROMPTS = [
+  'Show me where my money went last month',
+  'Plan for buying a car in 2027',
+  'Am I on track for retirement?',
+];
+/* Hidden on a chat surface — Ask Cait and any saved conversation already have a composer, and
+   a floating "talk to Cait" button on a page that invites talking is noise. */
+function renderPA(){
+  const host = document.getElementById('paSlot'); if(!host) return;
+  const a = ACT();
+  if(a && a.kind === 'chat'){ host.innerHTML = ''; return; }
+  host.innerHTML = '<div class="pa">'
+    + (S.paOpen
+        ? '<div class="pa-prompts">'
+          + PA_PROMPTS.map(q => '<button class="pa-prompt" data-pa="'+esc(q)+'">'+esc(q)+'</button>').join('')
+          + '</div>'
+        : '')
+    + '<button class="pa-fab" data-pa-toggle="1" aria-expanded="'+(S.paOpen ? 'true' : 'false')+'"'
+    + ' aria-label="Ask Cait">'+ico('sparkle',24)+'<span class="pa-dot"></span></button>'
+    + '</div>';
+}
+
+/* Tabs never shrink and the strip never scrolls, so when the window is too
+   narrow the least recently focused kept tab steps into +n instead. */
+function fitStrip(){
+  const strip = document.getElementById('strip');
+  if(strip.scrollWidth > strip.clientWidth + 1){
+    const victim = evictable()[0];
+    if(victim){
+      victim.hidden = true;
+      /* Width is the harder constraint than the cap, so if a recalled tab does not fit it
+         goes straight back — and the recall is not announced, because it never happened
+         as far as the user can see. */
+      const i = RECALLED.indexOf(victim.label);
+      if(i > -1) RECALLED.splice(i, 1);
+      else logRule('Moved to overflow — no room', '“'+victim.label+'” stepped into +n. Tabs never shrink to fit and the strip never scrolls sideways.', 'block');
+      renderStrip(); return;
+    }
+  }
+  if(RECALLED.length){
+    const back = RECALLED.slice(); RECALLED = [];
+    logRule('Back from overflow',
+      '“'+back.join('”, “')+'” returned to the strip now that there is room. Overflow is a queue, not a graveyard: closing a tab pulls the most recently used hidden one back in.', 'auto');
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   RENDER — CANVAS.  SKELETON ONLY, DELIBERATELY.
+   No copy, no numbers, no charts, no icons beyond simple squares.
+   Card titles on Home are real solely so the layout is recognisable.
+   ═══════════════════════════════════════════════════════════════ */
+const bar   = (w,h) => '<div class="sk-bar" style="width:'+w+';height:'+(h||9)+'px"></div>';
+const block = (h,w) => '<div class="sk-block" style="height:'+h+'px;width:'+(w||'100%')+'"></div>';
+const lines = (arr) => '<div class="sk-stack">'+arr.map(w=>bar(w)).join('')+'</div>';
+const skHead = () => '<div><div class="sk-title"></div><div class="sk-sub"></div></div>';
+/* Page titles are REAL — one name for a destination, written once and shown in the tab, the
+   sidebar row and the page head. Breadcrumbs are deliberately excluded: the hierarchy is two
+   levels deep and every destination is one click from the sidebar, so a breadcrumb would only
+   repeat the tab label. */
+const pageHead = (title, sub, action) => '<div class="page-head"><div>'
+  + '<div class="page-title">'+esc(title)+'</div>'
+  + (sub ? '<div class="page-sub">'+esc(sub)+'</div>' : '')
+  + '</div>' + (action || '') + '</div>';
+
+function cardShell(title, body, cls, action){
+  const real = S.role !== 'admin';
+  return '<section class="card '+(cls||'')+'">'
+    + '<div class="card-head">'
+    + (real ? '<div class="card-title">'+esc(title)+'</div>' : '<div class="sk-title" style="width:150px"></div>')
+    + (action||'') + '</div>' + body + '</section>';
+}
+
+/* "Net worth" and "Spending this month" are personal-Home cards. An admin-only user has
+   no personal Home, so that Home keeps the identical structure with skeleton titles
+   rather than asserting personal figures for a company account. */
+function homeCanvas(){
+  const real = S.role !== 'admin';
+  const ct = t => real ? '<div class="card-title">'+esc(t)+'</div>' : '<div class="sk-title" style="width:150px"></div>';
+  /* Customize was removed rather than left in place: with no saved-dashboard model there is
+     nothing for it to open, and a CTA that does nothing is worse than no CTA in a handoff.
+     It comes back with the dashboard template work (CAIT-512). */
+  /* Home speaks to the person, and names the employer as an ally rather than a payer:
+     "already pulling for each one" is the line that turns a benefits list into a plan.
+     "Acme" in the source copy is interpolated from ORG so the page cannot contradict the
+     sidebar, which says Acme Corp. First name only — the greeting is not a salutation.
+     Admin-only keeps the neutral head: an employer-admin's Home is not a personal plan, and
+     its copy is an open question rather than something to invent here. */
+  const first = '';   /* research build: no first name anywhere */
+  let h = real
+    ? pageHead('Here’s your plan.',
+               'Built around your priorities — '+ORG+' is already pulling for each one.')
+    : pageHead('Home', 'Your program at a glance');
+
+  /* 1 — Since you were last here: thin dismissible strip */
+  /* "Since you were last here" is a returning-user strip by definition — there is no
+     "last here" on a first visit. Hidden rather than emptied. */
+  if(!S.sinceDismissed && S.content !== 'first'){
+    h += '<div class="strip-note"><div class="sk-sq"></div>'
+      + '<div style="flex:1">'+(real ? '<div style="font-size:13px;font-weight:600">Since you were last here</div>' : '<div class="sk-title" style="width:170px"></div>')
+      + '<div style="margin-top:7px">'+bar('62%')+'</div></div>'
+      + '<button class="btn-ghost" data-act="dismiss-since" title="Dismiss" style="padding:4px">'+ico('x',14)+'</button></div>';
+  }
+
+  h += '<div class="grid">';
+
+  /* 2 — hero, wide, with a secondary value panel on the right */
+  h += '<section class="card wide"><div class="card-head">'+ct('Today’s highest-leverage move')+'</div>'
+    + '<div style="display:flex;gap:18px;align-items:stretch">'
+    + '<div style="flex:1;min-width:0">'+block(46)+'<div style="height:12px"></div>'+lines(['92%','78%','54%'])+'</div>'
+    + '<div style="width:1px;background:var(--line)"></div>'
+    + '<div style="width:210px;flex:0 0 210px">'+block(46)+'<div style="height:12px"></div>'+lines(['70%','88%'])+'</div>'
+    + '</div></section>';
+
+  /* 3 — What to do next: 4 ranked rows + a more affordance */
+  h += cardShell('What to do next',
+      '<div class="sk-stack" style="gap:12px">'
+      + [1,2,3,4].map(() =>
+          '<div style="display:flex;align-items:center;gap:12px">'
+          + '<div class="sk-sq"></div><div style="flex:1">'+lines(['58%','34%'])+'</div>'
+          + '<div class="sk-block" style="width:54px;height:22px"></div></div>').join('')
+      + '</div><div style="margin-top:14px"><button class="btn btn-ghost btn-sm">Show 6 more</button></div>',
+      'wide');
+
+  /* 4 + 5 — medium cards */
+  h += cardShell('Net worth', block(96) + '<div style="height:12px"></div>' + lines(['72%','48%']));
+  h += cardShell('Spending this month', block(96) + '<div style="height:12px"></div>' + lines(['66%','40%']));
+
+  /* 6 — the Spaces launcher. A card cannot host an application that has its own sidebar,
+         so the entries hand off exactly as the sidebar rows do. It advertises only what this
+         user actually has: Home can never offer a destination the sidebar lacks. */
+  const spaces = (navFor().groups.find(g => g.provided) || {}).items || [];
+  if(spaces.length) h += homeLauncher(spaces, ct);
+
+  h += '</div>';
+  return h;
+}
+
+function homeLauncher(entries, ct){
+  return '<section class="card wide"><div class="card-head">'
+    + ct('Your Spaces')
+    + '<span style="font-size:11px;color:var(--muted)">Opens in this tab, like everything else</span></div>'
+    + lines(['84%','52%'])
+    + '<div style="display:flex;gap:10px;margin-top:16px;flex-wrap:wrap">'
+    + entries.map(e => '<button class="btn btn-tertiary" data-act="open-tools" data-nav="'+e.id+'">'
+        + ico(e.icon || 'layers',14)+' '+esc(e.label)+'</button>').join('')
+    + '</div></section>';
+}
+
+/* A kept dashboard, opened from the sidebar. It names the conversation it came from and
+   offers the way back, because the conversation is the thing that can still answer questions
+   about it. */
+function dashboardCanvas(t){
+  const src = S.saved.dash.find(d => d.id === t.navId);
+  /* No subhead. The provenance is already carried by the one control that matters — the way
+     back to the conversation — so saying it in prose as well was the same fact twice. */
+  return pageHead(t.label, null,
+      src && src.from
+        ? '<button class="btn btn-outline" data-act="back-to-conv" data-conv="'+esc(src.from)+'">'
+          + ico('msg',14)+' Open the conversation</button>'
+        : '')
+    + '<div class="grid">'
+    + '<section class="card wide">'+block(150)+'</section>'
+    + '<section class="card">'+block(96)+'<div style="height:12px"></div>'+lines(['70%','44%'])+'</section>'
+    + '<section class="card">'+block(96)+'<div style="height:12px"></div>'+lines(['62%','38%'])+'</section>'
+    + '</div>';
+}
+
+/* A Space: the area's current picture, and the way into a conversation about it. Nothing to
+   configure and nothing to save — a dashboard is what a conversation produces. */
+function spaceCanvas(t){
+  return pageHead(t.label, 'Where this area stands right now',
+      '<button class="btn btn-primary" data-act="ask-here">'+ico('sparkle',14)+' Ask Cait about this</button>')
+    + '<div class="grid">'
+    + '<section class="card wide">'+block(120)+'</section>'
+    + '<section class="card">'+block(90)+'<div style="height:12px"></div>'+lines(['70%','44%'])+'</section>'
+    + '<section class="card">'+block(90)+'<div style="height:12px"></div>'+lines(['62%','38%'])+'</section>'
+    + '<section class="card wide"><div class="sk-stack" style="gap:12px">'
+    + [1,2,3].map(()=>'<div style="display:flex;align-items:center;gap:12px"><div class="sk-sq"></div>'
+        + '<div style="flex:1">'+lines(['54%','30%'])+'</div></div>').join('')
+    + '</div></section></div>';
+}
+
+function chatCanvas(t){
+  /* No subhead. "Conversation" only repeated what the title, the sidebar group and the tab
+     icon all already said — a subhead that names the category is filler. */
+  const pinned = S.saved.dash.some(d => d.from === t.navId);
+  return '<div style="max-width:720px;margin:0 auto">'
+    + pageHead(t.label)
+    + '<div class="sk-stack" style="gap:20px;margin-bottom:22px">'
+    + '<div style="display:flex;justify-content:flex-end"><div class="sk-block" style="width:52%;height:52px;border-radius:var(--r-xl)"></div></div>'
+    + '<div style="display:flex;gap:12px"><div class="sk-sq"></div><div style="flex:1">'+lines(['96%','88%','62%'])+'</div></div>'
+    + '<div style="display:flex;justify-content:flex-end"><div class="sk-block" style="width:38%;height:38px;border-radius:var(--r-xl)"></div></div>'
+    + '<div style="display:flex;gap:12px"><div class="sk-sq"></div><div style="flex:1">'+lines(['92%','70%'])+'</div></div>'
+    + '</div>'
+    /* A dashboard is an ANSWER first: it appears inside the conversation that produced it.
+       Pinning is a second, explicit act, and the only way one reaches the sidebar. The block
+       itself carries no button — the conversation has ONE action, below, so there is never a
+       question about which control saves it. */
+    + '<section class="card wide" style="margin-bottom:22px">'
+    + '<div class="card-head"><div class="card-title">Dashboard</div>'
+    + (pinned
+        ? '<span style="font-size:11px;color:var(--success-fg);display:flex;align-items:center;gap:5px">'+ico('check',14)+'Saved to your dashboards</span>'
+        : '')
+    + '</div>'
+    + block(120) + '<div style="height:12px"></div>'
+    + '<div class="grid">'+block(74)+block(74)+'</div></section>'
+    + '<div class="card" style="display:flex;align-items:center;gap:12px;padding:12px 14px">'
+    + '<div style="flex:1">'+bar('44%')+'</div>'
+    + (pinned
+        ? '<button class="btn btn-outline" disabled style="opacity:.55;cursor:default">'+ico('check',14)+' Saved</button>'
+        : '<button class="btn btn-primary" data-act="keep-dash">'+ico('grid',14)+' Save</button>')
+    + '</div>'
+    + '</div>';
+}
+
+/* Ask Cait — the landing surface, not a thread. Same composition as the real
+   screen (greeting · headline · subhead · chip row · pill composer), all skeleton. */
+/* ONE Ask Cait page, reached three ways, and it is a SKELETON.
+   The shell owns navigation: where the entry points are, what they open, and that they open
+   the same thing. The page's own composition is designed elsewhere — so the shell shows its
+   SHAPE and none of its copy, which is the same contract every other canvas in this file
+   works to. It also means the shell cannot go stale when that page changes.
+   All three entries render this: the sidebar's New chat, the Conversations `+` and the
+   Dashboards `+`. Which entry was used is recorded in the rule log rather than drawn, because
+   the prompt-variant decision lives in the ticket, not in a wireframe. */
+function askLanding(){
+  /* No goal deck. The eyebrow went with it — a label whose only job was to introduce the
+     cards is not something to keep once the cards are gone. What is left is the ask itself:
+     who you are, what this is, three suggestions, and somewhere to type. */
+  return '<div class="ask-wrap landing"><div class="ask-inner">'
+    + bar('92px',12)                                   /* greeting */
+    + '<div style="height:18px"></div>'
+    + block(44,'236px')                                /* the Ask Cait lockup */
+    + '<div style="height:16px"></div>'
+    + bar('330px',11)                                  /* what Cait is for */
+    + '<div style="height:26px"></div>'
+    + '<div class="ask-chips">'
+    /* Sized so three chips hold one row at a laptop canvas: each pill is its bar plus 40px of
+       padding, and the previous widths totalled 608 against a 623px canvas — one row in
+       theory, wrapped in practice. */
+    + ['118px','140px','104px'].map(w => '<div class="sk-pill">'+bar(w,10)+'</div>').join('')
+    + '</div>'
+    /* The composer keeps its real shape and its send control: it is the affordance the page
+       exists for, and a bar where the input goes says "input" better than a bar where the
+       whole composer goes. */
+    + '<div class="ask-composer glow"><div style="flex:1">'+bar('42%',11)+'</div>'
+    + '<button class="ask-send" data-act="send" title="Send" aria-label="Send">'+ico('arrowUp',20)+'</button></div>'
+    + '</div></div>';
+}
+function askCanvas(){ return askLanding(); }
+
+/* Memory — eyebrow, headline, intro, an action pill, then sections of entry
+   cards. Section counts and card copy stay skeleton; only the shape is real. */
+function memoryCanvas(){
+  const card = () => '<div class="mem-card"><span class="mem-dot"></span>'
+    + '<div style="flex:1;min-width:0">'+bar('34%',11)
+    + '<div style="height:9px"></div>'+bar('64%')
+    + '<div style="height:9px"></div>'+bar('20%',8)+'</div></div>';
+  const section = n => '<div class="mem-sec"><span class="mem-sec-icon"></span>'
+    + bar('118px',13)+'<div style="width:8px"></div>'+bar('56px',8)+'</div>'
+    + '<div class="sk-stack" style="gap:10px">'
+    + Array.from({length:n}, card).join('') + '</div>';
+
+  /* The four things Memory actually holds, named — the row label means nothing otherwise. */
+  const SECTIONS = [
+    {t:'Goals',       n:4, s:'What you are working toward'},
+    {t:'Life events', n:2, s:'What changed, and when'},
+    {t:'Preferences', n:1, s:'How you want Cait to work'},
+    {t:'Milestones',  n:3, s:'What you have already reached'},
+  ];
+  const titled = x => '<div class="mem-sec"><span class="mem-sec-icon"></span>'
+      + '<div><div style="font-size:14px;font-weight:600;color:var(--ink)">'+esc(x.t)+'</div>'
+      + '<div style="font-size:12px;color:var(--muted);margin-top:2px">'+esc(x.s)+'</div></div></div>'
+    + '<div class="sk-stack" style="gap:10px">'+Array.from({length:x.n}, card).join('')+'</div>';
+
+  return '<div class="mem-wrap">'
+    + pageHead('Memory', 'What Cait knows about you, and what it does with it')
+    + SECTIONS.map(titled).join('')
+    + '</div>';
+}
+
+/* The fallback surface — Connected accounts today. It gets a real title like every other
+   destination: it was the last page in the shell still wearing a skeleton heading, which read
+   as an unfinished page rather than as a page whose CONTENT is deliberately unfinished. */
+function genericCanvas(t){
+  return pageHead(t ? t.label : BRAND.product,
+    t && t.kind === 'accounts' ? 'What '+BRAND.product+' reads to build your plan — content in CAIT-578' : '')
+    + '<div class="grid">'
+    + '<section class="card wide">'+block(110)+'</section>'
+    + '<section class="card">'+block(80)+'</section>'
+    + '<section class="card">'+block(80)+'</section></div>';
+}
+
+/* ── Tools canvas: shows the nested-navigation situation ───────── */
+/* The product's real nav: five groups, real labels, the Cait badge and the
+   Coaching disclosure. High fidelity on purpose — this nav is the subject of the
+   nested-navigation review, so a grey box would hide the whole question. */
+const EMBED_NAV = [
+  /* Home and Cait are GONE from this nav on purpose. The product ships both, but the
+     ticket hands the legacy Home dashboard and the legacy Cait entry point to the Cait
+     shell — keeping them here would put two Homes and two Caits in one window. */
+  {group:'Guidance', items:[
+    {label:'Coaching', icon:'book', caret:true}]},
+  {group:'College Planning Tools', items:[
+    {label:'Private Student Loans', icon:'cap'},
+    {label:'529 Plans', icon:'coins'}]},
+  {group:'Student Debt Tools', items:[
+    {label:'Federal Repayment Plans', icon:'percent', active:true},
+    {label:'Refinancing', icon:'dollar'},
+    {label:'Extra Payments', icon:'refresh'},
+    {label:'Round Up', icon:'coins'}]},
+  {group:'Resources', items:[
+    {label:'My Loans', icon:'book'},
+    {label:'Learning Center', icon:'layers'}]},
+];
+
+/* The admin product's nav, after the same contract: its Home dashboard, Manage Account,
+   Help Center and Log Out are all chrome the Cait shell owns, so what survives is the two
+   work destinations. Employees keeps its disclosure chevron. */
+const EMBED_NAV_ADMIN = [
+  {items:[
+    {label:'Employees', icon:'user', caret:true, active:true},
+    {label:'Resource Center', icon:'book'},
+  ]},
+];
+/* Which product is embedded follows the tab that opened it. */
+const onAdminWidget = () => { const a = ACT(); return !!(a && a.kind === 'tools' && NAVX[a.navId] && NAVX[a.navId].admin); };
+
+function embedNav(){
+  /* Which of the product's rows is lit follows the entry point the user chose. A deep link
+     that does not move the destination's own nav is a link in name only. */
+  const a = ACT();
+  const want = a && NAVX[a.navId] && NAVX[a.navId].adminNav;
+  const rows = g => g.items.map(it =>
+    '<div class="enav-row'+((want ? it.label === want : it.active) ? ' active' : '')+'">'
+    + '<span class="ic">'+ico(it.icon,17)+'</span>'
+    + '<span class="enav-lbl">'+esc(it.label)+'</span>'
+    + (it.badge ? '<span class="enav-badge">'+esc(it.badge)+'</span>' : '')
+    + (it.caret ? '<span class="enav-caret">'+ico('chevRight',16)+'</span>' : '')
+    + '</div>').join('');
+  const model = onAdminWidget() ? EMBED_NAV_ADMIN : EMBED_NAV;
+  return '<div class="enav-scroll">'
+    + '<div class="enav-head"><button class="enav-collapse" data-act="embed-nav"'
+    + ' title="Hide the product’s nav" aria-label="Hide the product’s nav" aria-expanded="true">'
+    + ico('chevLeft',14)+'</button></div>'
+    + model.map(g => (g.group ? '<div class="enav-grp">'+esc(g.group)+'</div>' : '') + rows(g)).join('')
+    + '</div>';
+}
+
+/* Content column: the real page's shape in skeleton — hero with three bullet
+   rows and two CTAs, How it works, the two-path split, testimonials, FAQ. */
+function embedContent(){
+  const sk = (w,h) => bar(w,h);
+  const hero = '<div class="ec-hero">'
+    + '<div class="ec-hero-l">'
+    + '<div class="ec-eyebrow"><div class="sk-sq" style="width:22px;height:22px"></div>'+sk('74px',10)+'</div>'
+    + '<div class="sk-stack">'+sk('92%',20)+sk('86%',20)+sk('44%',20)+'</div>'
+    + ['96%','88%','74%'].map(w => '<div class="ec-bullet"><div class="sk-sq" style="width:15px;height:15px"></div>'+sk(w)+'</div>').join('')
+    + '<div class="ec-cta"><div class="sk-block" style="width:104px;height:34px;border-radius:99px;background:var(--primary);opacity:.32"></div>'
+    + '<div class="sk-block" style="width:186px;height:34px;border-radius:99px;border:1px solid var(--primary);opacity:.4;background:transparent"></div></div>'
+    + '</div>'
+    + '<div class="ec-hero-r"><div class="ec-shot"></div>'
+    + '<div class="ec-bub" style="top:34%">'+sk('150px')+'</div>'
+    + '<div class="ec-bub" style="top:54%;left:2px">'+sk('112px')+'</div>'
+    + '</div></div>';
+
+  const how = '<div class="ec-card"><div style="display:flex;justify-content:center;margin-bottom:16px">'+sk('96px',12)+'</div>'
+    + '<div class="ec-cols">'
+    + [1,2,3].map(i => '<div class="sk-stack"><div class="ec-num">'+i+'</div>'+sk('64%',12)+sk('100%')+sk('82%')+'</div>').join('')
+    + '</div></div>';
+
+  const paths = '<div class="ec-card">'
+    + '<div style="display:flex;flex-direction:column;align-items:center;gap:7px;margin-bottom:16px">'+sk('190px',12)+sk('300px')+'</div>'
+    + '<div class="ec-cols-2">'
+    + [true,false].map(first => '<div class="ec-sub">'
+        + (first ? '<span class="ec-chip">Instant guidance</span>' : '')
+        + '<div class="sk-sq" style="width:26px;height:26px"></div>'
+        + '<div style="height:10px"></div>'+sk('44%',12)+'<div style="height:10px"></div>'
+        + ['92%','100%','70%'].map(w => '<div class="ec-check" style="margin-bottom:7px"><span class="ic">'+ico('check',14)+'</span>'+sk(w)+'</div>').join('')
+        + '<div class="sk-block" style="width:132px;height:30px;border-radius:99px;border:1px solid var(--primary);opacity:.4;background:transparent;margin-top:4px"></div>'
+      + '</div>').join('')
+    + '</div></div>';
+
+  const quotes = '<div class="ec-card" style="border:none;background:transparent;padding:16px 0 0">'
+    + '<div style="display:flex;flex-direction:column;align-items:center;gap:7px;margin-bottom:14px">'+sk('320px',13)+sk('250px',13)+'</div>'
+    + '<div class="ec-cols">'
+    + [1,2,3].map(() => '<div class="ec-quote"><div class="ec-qmark">&ldquo;</div>'
+        + '<div class="sk-stack" style="margin:8px 0 12px">'+sk('100%')+sk('94%')+sk('78%')+'</div>'+sk('58px',10)+'</div>').join('')
+    + '</div></div>';
+
+  const faq = '<div class="ec-card">'+sk('150px',12)+'<div style="height:6px"></div>'
+    + ['52%','30%','34%','76%','66%'].map(w => '<div class="ec-faq">'+sk(w)
+        + '<span style="margin-left:auto;color:var(--muted);display:flex">'+ico('chevDown',16)+'</span></div>').join('')
+    + '</div>';
+
+  return hero + how + paths + quotes + faq;
+}
+
+/* Resource centre, in the same skeleton language. It exists because it is now the only
+   admin entry point in the section variant: opening a tab called "Resource centre" and
+   drawing the Employees table under it is the kind of detail a reviewer reads as "not
+   built". Structure from the product — a heading, a search row, and a grid of resource
+   cards. Employees is still one click away in the product's own nav, which is the point
+   of linking to a product rather than to a screen. */
+function resourceCentre(){
+  const sk = (w,h) => bar(w,h);
+  const head = '<div style="margin-bottom:16px">'+sk('210px',18)+'</div>';
+  const search = '<div style="display:flex;align-items:center;gap:14px;margin-bottom:18px">'
+    + '<div class="sk-block" style="flex:1;height:38px;border-radius:99px"></div>'
+    + '<div class="sk-block" style="width:96px;height:38px;border-radius:99px"></div></div>';
+  const card = () => '<div class="ec-card" style="margin-top:0">'
+    + '<div class="sk-block" style="height:96px;margin-bottom:12px"></div>'
+    + sk('72%',12) + '<div style="height:7px"></div>' + sk('44%',10) + '</div>';
+  const grid = '<div class="ec-cols-2" style="margin-bottom:16px">'+card()+card()+'</div>'
+    + '<div class="ec-cols-2">'+card()+card()+'</div>';
+  return head + search + grid;
+}
+
+/* Employees List, in the same skeleton language as the employee page: the nav is real,
+   everything inside the canvas is bars. Structure from the product — invite banner with
+   its primary action, the Employees / Census History tabs, search with a download link,
+   four filters, the seven-column table, and the paging footer. */
+function employeesList(){
+  const sk = (w,h) => bar(w,h);
+  const banner = '<div class="ec-banner"><div class="sk-sq" style="width:26px;height:26px"></div>'
+    + '<div style="flex:1;min-width:0">'+sk('56%',11)+'</div>'
+    + '<div class="sk-block" style="width:150px;height:36px;border-radius:99px;background:var(--primary);opacity:.32"></div></div>';
+
+  const head = '<div style="margin-bottom:16px">'+sk('190px',18)+'</div>';
+
+  const tabs = '<div class="ec-tabs">'
+    + '<div class="ec-tab on">'+sk('66px',11)+'</div>'
+    + '<div class="ec-tab">'+sk('84px',11)+'</div></div>';
+
+  const search = '<div style="display:flex;align-items:center;gap:14px">'
+    + '<div class="ec-field">'+sk('42%')+'</div>'
+    + '<div class="sk-block" style="width:92px;height:36px;border-radius:99px;border:1px solid var(--primary);opacity:.4;background:transparent"></div>'
+    + '<div style="display:flex;align-items:center;gap:7px">'+ico('down',14)+sk('74px',10)+'</div></div>';
+
+  const filters = '<div class="ec-sels">'
+    + [1,2,3,4].map(() => '<div class="ec-sel">'+sk('54%',10)
+        + '<span style="color:var(--muted);display:flex">'+ico('chevDown',14)+'</span></div>').join('')
+    + '</div>';
+
+  const cols = ['64%','78%','70%','58%','66%','52%'];
+  const table = '<div class="et-row head">'+cols.map(w => sk(w,10)).join('')
+    + sk('60%',10)+'</div>'
+    + [1,2,3,4,5,6,7,8].map(() => '<div class="et-row">'
+        + ['52%','82%','66%','60%','72%'].map(w => sk(w)).join('')
+        + '<div class="et-status"><span class="et-dot"></span>'+sk('56%')+'</div>'
+        + '<div style="color:var(--muted);letter-spacing:1px;font-size:13px">•••</div>'
+      + '</div>').join('');
+
+  const foot = '<div class="et-foot">'+sk('150px',10)
+    + '<div style="margin-left:auto;display:flex;align-items:center;gap:12px">'+sk('96px',10)
+    + '<span style="color:var(--muted);display:flex">'+ico('chevLeft',14)+'</span>'
+    + '<span style="color:var(--muted);display:flex">'+ico('chevRight',14)+'</span></div></div>';
+
+  return '<div class="ec-eyebrow" style="margin-bottom:14px">'
+      + '<div class="sk-sq" style="width:24px;height:24px"></div>'+sk('92px',10)+'</div>'
+    + banner + head
+    + '<div class="ec-card" style="margin-top:0">'+tabs+search+filters+table+foot+'</div>';
+}
+
+function embedSkeleton(shimmer){
+  const sh = shimmer ? ' shimmer' : '';
+  const tucked = !embedOpen();
+  return '<div class="embed">'
+    + '<div class="embed-nav'+(tucked ? ' tucked' : '')+sh+'">'+embedNav()+'</div>'
+    + '<div class="embed-canvas'+sh+'">'
+    + (tucked
+        ? '<button class="embed-menu" data-act="embed-nav" aria-expanded="false">'+ico('menu',16)+'Menu</button>'
+        : '')
+    + (onAdminWidget()
+         ? (((ACT() && NAVX[ACT().navId] || {}).adminNav === 'Resource Center')
+              ? resourceCentre() : employeesList())
+         : embedContent())
+    + '</div></div>';
+}
+
+function toolsCanvas(t){
+  const st = S.toolsState;
+  /* Name the SPACE, never "the tool" or "the embedded product". The user chose Student debt
+     or College planning; they never chose a tool, and they have no idea what is embedded. */
+  const area = t.label;
+
+  if(!t.loaded){
+    return '<div class="dashed" style="padding:34px;display:flex;flex-direction:column;align-items:center;gap:12px;text-align:center">'
+      + '<div class="dashed-lbl">Not loaded yet</div>'
+      + '<div style="font-size:13.5px;color:var(--muted);max-width:400px;line-height:1.55">'
+      + 'This tab came back from your last session. '+esc(area)+' loads when you ask for it, so signing back in never pays for an area you did not open.</div>'
+      + '<button class="btn btn-primary" data-act="load-tools">'+ico('refresh',14)+' Load '+esc(area)+'</button></div>';
+  }
+
+  let h = '';
+
+  /* Restored is the ABSENCE of a problem, so it does not get an alert. An alert is for
+     something the user has to know or act on; announcing that nothing went wrong is noise,
+     and the content being there is already the evidence. One muted line, no icon, no border,
+     no dismiss — and nothing to dismiss, because there is no decision in it. */
+  if(st === 'restored'){
+    h += '<div class="quiet-note">Picked up where you left off</div>';
+  }
+  if(st === 'expired'){
+    h += alertBox('warning', 'Your '+area+' session expired',
+      'Cait kept this tab and everything in it. Reconnect to make it interactive again.',
+      {action:'Reconnect', act:'tools-retry', style:'margin-bottom:14px'});
+  }
+
+  if(st === 'loading'){
+    h += '<div class="dashed">'+embedSkeleton(true)+'</div>';
+    return h;
+  }
+  if(st === 'failed'){
+    return h + alertBox('error', area+' didn’t load',
+      'The problem is contained to this area — every other tab is untouched, and this one stays open so you do not lose your place.',
+      {action:'Try again', act:'tools-retry'});
+  }
+  if(st === 'blocked'){
+    return h + alertBox('info', 'Your browser blocked '+area,
+      'Nothing has gone wrong with '+area+' itself: the browser is blocking third-party content before it can load. Opening it in its own tab gets around that.',
+      {action:'Open in a new tab'});
+  }
+
+  h += '<div class="dashed'+(st==='expired'?' dimmed':'')+'">' + embedSkeleton(false) + '</div>';
+  return h;
+}
+
+/* Settings — a skeleton of the fields the platform already carries, so engineering has a
+   shape to build against. Content belongs to CAIT-578; this is the destination and its frame.
+   Restored after an earlier deletion swallowed it: removing the conversations index cut from
+   one function's opening brace to the next, and this sat between them. */
+function settingsCanvas(){
+  const field = (label, value, wide) => '<div class="set-field'+(wide ? ' wide' : '')+'">'
+    + '<div class="set-label">'+esc(label)+'</div>'
+    + '<div class="set-input">'+bar(value)+'</div></div>';
+  return '<div style="max-width:720px">'
+    + pageHead('Settings', 'Your details. Notification and privacy settings follow in CAIT-578.')
+    + '<section class="card"><div class="card-head"><div class="card-title">Your details</div>'
+    + '<button class="btn btn-outline btn-sm">Edit</button></div>'
+    + '<div class="set-grid">'
+    + field('Name', '58%')
+    + field('Email', '72%')
+    + field('Phone number', '44%')
+    + field('Alternate email', '66%')
+    + field('Mailing address', '80%', true)
+    + '</div></section>'
+    + '<section class="card" style="margin-top:16px"><div class="card-head">'
+    + '<div class="card-title">Notifications</div>'
+    + '<span style="font-size:11px;color:var(--muted)">CAIT-578</span></div>'
+    + '<div class="dashed" style="padding:20px;text-align:center;font-size:13px;color:var(--muted)">'
+    + 'Owned by another ticket — excluded here on purpose rather than left blank.</div></section>'
+    + '</div>';
+}
+
+function renderCanvas(){
+  const t = ACT(), c = document.getElementById('canvas');
+  if(!t){ c.innerHTML = ''; return; }
+  c.innerHTML =
+      t.kind === 'home'      ? homeCanvas()
+    : t.kind === 'tools'     ? toolsCanvas(t)
+    : t.navId === 'ask'      ? askCanvas()        /* the landing, not a thread */
+    : t.kind === 'chat'      ? chatCanvas(t)
+    : t.kind === 'memory'    ? memoryCanvas()
+    : t.kind === 'space' ? spaceCanvas(t)
+    : t.kind === 'settings'  ? settingsCanvas()
+    : t.kind === 'dashboard' ? dashboardCanvas(t)
+    : genericCanvas(t);
+}
+
+/* Every render replaces the sidebar's innerHTML, which destroys the focused element — so a
+   keyboard user who collapses a section loses their place entirely. Focus is identified by
+   what the control IS rather than by node identity, and restored after the rebuild. */
+function focusKey(el){
+  if(!el || !el.closest || !el.closest('.sidebar')) return null;
+  if(el.id) return '#'+el.id;
+  for(const a of ['data-nav','data-grp','data-toggle','data-more','data-create','data-showall'])
+    if(el.hasAttribute(a)) return '['+a+'="'+el.getAttribute(a).replace(/"/g,'\\"')+'"]';
+  return null;
+}
+function render(){
+  const key = focusKey(document.activeElement);
+  renderSidebar(); reflowOverflow(); renderStrip(); renderCanvas(); syncMobile();
+  if(key){ const back = document.querySelector('.sidebar '+key); if(back) back.focus({preventScroll:true}); }
+}
+
+/* ── Keyboard: one tab stop into the sidebar, arrows to move inside it ───────
+   Tab alone through a 15-row sidebar is 15 stops before the canvas, which is why the
+   listbox/tree convention exists: arrows move within the group, Tab leaves it. Rows are real
+   <button>s, so Enter and Space already activate them and focus is already visible. */
+function navStops(){
+  return [...document.querySelectorAll('.sidebar .sb-collapse, .sidebar .nav, .sidebar .grp, .sidebar .acct')]
+    .filter(el => el.offsetParent !== null);
+}
+document.querySelector('.sidebar').addEventListener('keydown', e => {
+  if(e.target.closest('[data-rename]')) return;      /* renaming is a text field, not a list */
+  const stops = navStops();
+  const i = stops.indexOf(document.activeElement);
+  if(i < 0) return;
+  const go = j => { e.preventDefault(); stops[(j + stops.length) % stops.length].focus(); };
+  if(e.key === 'ArrowDown') return go(i + 1);
+  if(e.key === 'ArrowUp')   return go(i - 1);
+  if(e.key === 'Home')      return go(0);
+  if(e.key === 'End')       return go(stops.length - 1);
+  /* On a section header the horizontal arrows do what they do in every tree: open and close,
+     never move. Pressing Right on an already-open section must NOT collapse it. */
+  const tog = document.activeElement.closest('.grp-head')?.querySelector('[data-toggle]');
+  if(tog && (e.key === 'ArrowRight' || e.key === 'ArrowLeft')){
+    const shut = isShut({label: tog.dataset.toggle});
+    if((e.key === 'ArrowRight') === shut){ e.preventDefault(); tog.click(); }
+  }
+});
+function syncMobile(){
+  const a = ACT();
+  const m = document.getElementById('mobile');
+  m.querySelector('.m-chip').firstChild.textContent = (a ? a.label : 'Home') + ' ';
+  document.getElementById('mCount').textContent = String(ordered().length);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   EVENTS — sidebar
+   ═══════════════════════════════════════════════════════════════ */
+document.querySelector('.sidebar').addEventListener('click', e => {
+  const acct = e.target.closest('#acctBtn');
+  if(acct){ e.stopPropagation(); openAcctMenu(acct); return; }
+  const tog = e.target.closest('[data-toggle]');
+  if(tog){
+    const label = tog.dataset.toggle;
+    /* Nothing to disclose, so the disclosure does nothing — and says so once, rather than
+       flipping a chevron open over an empty list. The `+` beside it is the way forward and it
+       is permanently visible in exactly this state. */
+    const grp = navFor().groups.find(g => g.label === label);
+    if(grp && grp.total === 0){
+      logRule('“'+label+'” is empty',
+        'The disclosure has nothing to show, so it stays closed. Use + to make the first one — it is visible without hovering while a section is empty.');
+      return;
+    }
+    /* Read through isShut(), never off the raw map — an untouched section holds `undefined`
+       there, and comparing the raw value against a default is how this broke once already. */
+    const nowShut = !isShut({label});
+    S.shut[label] = nowShut;
+    logRule(nowShut ? '“'+label+'” collapsed' : '“'+label+'” expanded',
+      nowShut
+        ? 'The header keeps the count, and lights a dot if the tab you are looking at came from inside — a collapsed group still has to say what it is holding.'
+        : 'Sections ship OPEN, so the user sees their own work without opening anything. Collapsing is the exception, remembered for the session.');
+    render();
+    return;
+  }
+  const add = e.target.closest('[data-create]');
+  if(add){
+    /* Both paths land on the same screen. A dashboard is what a conversation produces, so
+       creating one starts a conversation — the header is what tells the user which of the two
+       they asked for. */
+    S.askFor = add.dataset.create === 'dash' ? 'dash' : 'landing';
+    openNav('new-chat', {fromCategory:true});
+    logRule(S.askFor === 'dash' ? 'New dashboard — from the category' : 'New chat — from the category',
+      S.askFor === 'dash'
+        ? 'The + on Dashboards opens Ask Cait with a dashboard-shaped header. It does not create an empty dashboard: dashboards stay conversation-born, and this one appears in the conversation you are about to have, then reaches the sidebar when you save it.'
+        : 'The + on Conversations opens the same Ask Cait screen the sidebar’s New chat does. One creation surface, reachable from the category it creates into.');
+    return;
+  }
+  const all = e.target.closest('[data-showall]');
+  if(all){
+    const label = all.dataset.showall;
+    S.showAll[label] = !S.showAll[label];
+    logRule(S.showAll[label] ? '“'+label+'” expanded past the cap' : '“'+label+'” back to five',
+      S.showAll[label]
+        ? 'Sections cap at '+RAIL_CAP+' so nothing below them gets pushed off the fold — Spaces sits under both created lists now, so the cap is what keeps the widget entry reachable. Expanding is in place: there is no dashboards page to send anyone to, and one control should not behave two ways.'
+        : 'Back to the five most recent.');
+    render();
+    return;
+  }
+  const more = e.target.closest('[data-more]');
+  if(more){ e.stopPropagation(); openRowMenu(more, more.dataset.more); return; }
+  const grp = e.target.closest('[data-grp]');
+  if(grp){ expandFromRail(grp.dataset.grp); return; }
+  const n = e.target.closest('[data-nav]');
+  if(!n) return;
+  if(false){
+    /* Account is a destination like any other — it uses the transient slot too. */
+    /* The avatar is an entry point to Settings, not a second surface: one destination beats
+       two half-built ones, and the account menu itself is CAIT-578's to design. */
+    openNav('settings', {});
+    return;
+  }
+  /* No modifier variant: a plain click already opens a tab, so ⌘/Ctrl would mean the same
+     thing. One gesture, one result. */
+  openNav(n.dataset.nav, {});
+});
+/* An index page is a destination like any other — it takes the transient slot, so
+   browsing the full list never costs the user a kept tab. */
+function openAdHoc(id, label, icon){
+  const ex = TABS().find(t => t.navId === id);
+  if(ex){ focusTab(ex.uid, {rule:'Already open — focused', detail:'“'+label+'” is open in another tab.'}); return; }
+  const nt = {uid:'tb-'+(++UID), navId:id, label, icon, kind:'other', family:null,
+              lastFocus:++SEQ, hidden:false, loaded:true};
+  TABS().push(nt); C().activeUid = nt.uid;
+  logRule('Opened in a tab', '“'+label+'” opened as its own tab — same rule as every other destination.');
+  syncRail(); render();
+}
+
+/* Enter commits, Escape cancels, blur commits — a rail row is not a form to submit. */
+document.querySelector('.sidebar').addEventListener('keydown', e => {
+  const inp = e.target.closest('[data-rename]'); if(!inp) return;
+  if(e.key === 'Enter'){ e.preventDefault(); commitRename(inp.dataset.rename, inp.value); }
+  else if(e.key === 'Escape'){ e.preventDefault(); commitRename(inp.dataset.rename, null); }
+});
+document.querySelector('.sidebar').addEventListener('focusout', e => {
+  const inp = e.target.closest('[data-rename]');
+  if(inp && S.renaming === inp.dataset.rename) commitRename(inp.dataset.rename, inp.value);
+});
+
+document.getElementById('collapseBtn').addEventListener('click', e => {
+  /* This control owns its click. It sits inside .sb-brand, which expands the rail when
+     clicked — and by the time the click reaches that handler, render() has already swapped
+     this button's glyph, so the node that was clicked is detached and its `closest()` guard
+     reports "not the collapse button". The result was a sidebar that collapsed and
+     re-expanded inside one click: the toggle looked dead to anyone clicking the icon
+     rather than its padding. Same pattern as #acctBtn above. */
+  /* Stopping the click also stops the document-level closeMenus, so do its job here — an
+     open ⋯ or account menu must not outlive the sidebar it was anchored to. */
+  closeMenus();
+  e.stopPropagation();
+  /* Toggle, not a one-way trip. */
+  if(document.body.dataset.rail === '1'){
+    S.userCollapsed = false;
+    logRule('Sidebar expanded', 'Back to '+px('--sidebar-w')+'. The same control collapses and expands, so the rail is never a state you have to work out how to leave.');
+    syncRail(); render(); return;
+  }
+  S.userCollapsed = true;
+  const onWidget = !!(ACT() && ACT().kind === 'tools');
+  logRule('Sidebar collapsed',
+    'Cait steps down to the '+px('--rail-w')+' icon rail.'
+    + (onWidget && S.embedNavUser === null
+        ? ' A widget is focused and its own nav was tucked away, so it slides out into the full-height slot — one nav at a time, and this is how the user hands the slot over.'
+        : ''));
+  syncRail(); render();
+});
+/* In the rail, the brand mark expands again. */
+function expandFromRail(what){
+  if(document.body.dataset.rail !== '1') return;
+  S.userCollapsed = false;
+  logRule('Sidebar expanded', what ? 'Opened the rail to reach “'+what+'”.' : 'Expanded from the rail.');
+  syncRail(); render();
+}
+document.querySelector('.sb-brand').addEventListener('click', e => {
+  if(document.body.dataset.rail !== '1') return;
+  /* Positive match on the mark, not "anything that isn't the toggle". A negative guard
+     fails destructive when the clicked node has been re-rendered out of the tree; this one
+     fails safe — worst case the rail does not expand, instead of fighting the toggle. */
+  if(!e.target.closest('.sb-lockup')) return;
+  expandFromRail(null);
+});
+
+/* ═══════════════════════════════════════════════════════════════
+   EVENTS — tab strip
+   ═══════════════════════════════════════════════════════════════ */
+const strip = document.getElementById('strip');
+strip.addEventListener('click', e => {
+  if(e.target.closest('#ovfBtn')){ e.stopPropagation(); openOvfMenu(e.target.closest('#ovfBtn')); return; }
+  const el = e.target.closest('.tab'); if(!el) return;
+  const t = TABS().find(x => x.uid === el.dataset.uid); if(!t) return;
+  const act = e.target.closest('[data-act]');
+  if(act && act.dataset.act === 'close'){ e.stopPropagation(); closeTab(t.uid); return; }
+  focusTab(t.uid, {rule:'Tab focused', detail:'“'+t.label+'” — its contents were held while you were away.'});
+});
+
+/* drag: reorder kept tabs, or drag the transient tab left to promote it */
+let DRAG = null;
+strip.addEventListener('dragstart', e => {
+  const el = e.target.closest('.tab'); if(!el) return;
+  DRAG = el.dataset.uid; el.dataset.dragging = 'true';
+  e.dataTransfer.effectAllowed = 'move';
+  try{ e.dataTransfer.setData('text/plain', DRAG); }catch(_){}
+});
+strip.addEventListener('dragend', () => {
+  DRAG = null;
+  strip.querySelectorAll('.tab').forEach(el => { delete el.dataset.dragging; delete el.dataset.dropbefore; });
+});
+strip.addEventListener('dragover', e => {
+  if(!DRAG) return;
+  e.preventDefault();
+  const el = e.target.closest('.tab');
+  strip.querySelectorAll('.tab').forEach(x => delete x.dataset.dropbefore);
+  if(el && el.dataset.uid !== DRAG) el.dataset.dropbefore = 'true';
+});
+strip.addEventListener('drop', e => {
+  if(!DRAG) return;
+  e.preventDefault();
+  const el = e.target.closest('.tab'); if(!el) return;
+  const list = ordered();
+  const from = list.findIndex(t => t.uid === DRAG);
+  const to   = list.findIndex(t => t.uid === el.dataset.uid);
+  if(from < 0 || to < 0 || from === to){ DRAG = null; return; }
+  const t = list[from];
+  const arr = TABS();
+  arr.splice(arr.indexOf(t), 1);
+  const j = arr.findIndex(x => x.uid === el.dataset.uid);
+  arr.splice(Math.max(0, j), 0, t);
+  logRule('Tabs reordered', '“'+t.label+'” moved. Every tab is the same kind of thing, so any of them can go anywhere.');
+  DRAG = null; render();
+});
+
+/* ═══════════════════════════════════════════════════════════════
+   EVENTS — canvas (the promotion triggers reviewers can pull)
+   ═══════════════════════════════════════════════════════════════ */
+document.getElementById('canvas').addEventListener('click', e => {
+  const a = e.target.closest('[data-act]'); if(!a) return;
+  const act = a.dataset.act, t = ACT();
+  if(act === 'send'){
+    if(t.navId === 'ask'){ saveConversation(t); syncRail(); render(); }
+    else logRule('Message sent', 'The conversation is already saved in the sidebar, so nothing changes in the shell.');
+  }
+  else if(act === 'new-chat-here' || act === 'ask-here'){ openNav('new-chat', {}); }
+  else if(act === 'keep-dash'){ keepDashboard(t); }
+  else if(act === 'back-to-conv'){ openNav(a.dataset.conv, {}); }
+  else if(act === 'open-tools'){
+    logRule('Launcher, not an embed', 'The card hands off to the Space rather than embedding it — a card cannot host an application that has its own sidebar.', 'block');
+    openNav(a.dataset.nav, {});
+  }
+  else if(act === 'load-tools'){
+    t.loaded = true; S.toolsState = 'ready'; syncSegs();
+    logRule('Loaded on demand', 'The session was rebuilt when the user asked for it, not at restore time.', 'auto');
+    render();
+  }
+  else if(act === 'tools-retry'){ S.toolsState = 'ready'; syncSegs(); logRule('Retried in place', 'The tab never closed itself, so retrying happens where the failure was.'); render(); }
+  else if(act === 'dismiss-since'){ S.sinceDismissed = true; renderCanvas(); }
+  else if(act === 'embed-nav'){
+    S.embedNavUser = !embedOpen();
+    const hostOpen = document.body.dataset.rail !== '1';
+    logRule(S.embedNavUser ? 'Product nav opened — by hand' : 'Product nav tucked away — by hand',
+      S.embedNavUser
+        ? 'Back to '+px('--embed-nav-w')
+          + (hostOpen
+              ? ', alongside the '+px('--sidebar-w')+' Cait sidebar. That is '+(parseInt(px('--sidebar-w'))+parseInt(px('--embed-nav-w')))+'px of chrome before any content — available, and now your setting, so the shell will stop tucking it away for you.'
+              : '. Cait is on its rail, so this nav has the full-height slot.')
+        : 'Tucked behind the product’s Menu button — the platform’s own collapsed state, not an icon rail. Set by hand, so it stays tucked even while Cait is on its rail.');
+    renderCanvas();
+  }
+});
+
+/* ═══════════════════════════════════════════════════════════════
+   MENUS
+   ═══════════════════════════════════════════════════════════════ */
+function closeMenus(){ document.querySelectorAll('.ctx-menu,.ovf-menu').forEach(m => m.remove()); }
+document.addEventListener('click', closeMenus);
+document.addEventListener('keydown', e => { if(e.key === 'Escape') closeMenus(); });
+
+function openOvfMenu(anchor){
+  if(document.querySelector('.ovf-menu')){ closeMenus(); return; }
+  closeMenus();
+  const hid = ordered().filter(t => t.hidden);
+  const r = anchor.getBoundingClientRect();
+  const m = document.createElement('div');
+  m.className = 'ovf-menu';
+  m.style.top = (r.bottom + 6) + 'px';
+  m.style.left = Math.max(8, Math.min(r.left, window.innerWidth - 276)) + 'px';
+  m.innerHTML = '<div class="ovf-head"><div class="t">Hidden tabs</div>'
+    + '<div class="s">Still open, state intact. Overflow hides — it never closes.</div></div>'
+    + '<div class="ovf-list">' + hid.map(t =>
+        '<button class="ovf-item" data-uid="'+t.uid+'"><span class="ic">'+ico(t.icon,15)+'</span>'
+        + '<span class="t">'+esc(t.label)+'</span><span class="s">kept</span></button>').join('')
+    + '</div>';
+  m.addEventListener('click', e => {
+    e.stopPropagation();
+    const b = e.target.closest('[data-uid]'); if(!b) return;
+    closeMenus();
+    focusTab(b.dataset.uid, null);
+  });
+  document.body.appendChild(m);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   RAIL MUTATION — the rail is written to, not only read from
+   ═══════════════════════════════════════════════════════════════ */
+const LIST_NOUN = {dash:'Dashboard', conv:'Conversation', adminConv:'Conversation'};
+
+function savedOf(id){
+  for(const list of ['dash','conv','adminConv']){
+    const i = S.saved[list].findIndex(x => x.id === id);
+    if(i > -1) return {list, i, arr:S.saved[list], item:S.saved[list][i]};
+  }
+  return null;
+}
+
+/* CREATE — a new conversation is what a sent message leaves behind, so the rail entry and
+   the tab are the same event: the transient Ask Cait surface becomes a saved item. */
+function saveConversation(t, seed){
+  const id = 'c-new-'+(++UID);
+  const label = seed || 'New conversation';
+  S.saved.conv.unshift({id, label});
+  /* The tab you typed in BECOMES the conversation — no second tab appears. Sending is a
+     navigation like any other, so it obeys the same rule as the sidebar. */
+  Object.assign(t, {navId:id, label, icon:'msg', kind:'chat', family:null, lastFocus:++SEQ});
+  logRule('New conversation saved',
+    '“'+label+'” appears at the top of Conversations in the sidebar, and the tab you typed in becomes that conversation — one event, one tab, no second surface. Any dashboard this conversation produces lives inside it.', 'auto');
+  return id;
+}
+
+/* SAVE — the one way a dashboard reaches the sidebar. It carries its source conversation
+   with it, so an answer you kept never loses the thread that produced it. */
+function keepDashboard(t){
+  const id = 'd-new-'+(++UID);
+  S.saved.dash.unshift({id, label:t.label, from:t.navId, fromLabel:t.label});
+  logRule('Saved to dashboards',
+    '“'+t.label+'” now has a row under Dashboards. It was already on screen inside the conversation — saving is about getting back to it later without remembering which conversation produced it. There is no dashboards page and nothing was configured.', 'auto');
+  syncRail(); render();
+}
+
+/* RENAME — one label, every surface. */
+function commitRename(id, value){
+  const hit = savedOf(id); S.renaming = null;
+  if(!hit){ render(); return; }
+  const was = hit.item.label, now = (value||'').trim();
+  if(!now || now === was){ logRule('Rename cancelled', '“'+was+'” kept its name.'); render(); return; }
+  hit.item.label = now;
+  TABS().filter(t => t.navId === id).forEach(t => t.label = now);
+  logRule('Renamed', '“'+was+'” → “'+now+'”. The rail row, its open tab and the canvas heading are one label, so none of them can drift.');
+  render();
+}
+
+/* REORDER — kept order is the user's to set, in the rail as well as the strip. */
+function moveSaved(id, dir){
+  const hit = savedOf(id); if(!hit) return;
+  const j = hit.i + dir;
+  if(j < 0 || j >= hit.arr.length){
+    logRule('Already at the '+(dir < 0 ? 'top' : 'bottom'), '“'+hit.item.label+'” cannot move further.', 'block');
+    return;
+  }
+  hit.arr.splice(hit.i, 1); hit.arr.splice(j, 0, hit.item);
+  logRule('Reordered in the rail',
+    '“'+hit.item.label+'” moved '+(dir < 0 ? 'up' : 'down')+'. Rail order and tab order are independent — the strip keeps the order the user set there.');
+  render();
+}
+
+/* DELETE — the destructive one, and the only thing that removes a rail item. */
+function deleteSaved(id){
+  const hit = savedOf(id); if(!hit) return;
+  hit.arr.splice(hit.i, 1);
+  const open = TABS().filter(t => t.navId === id);
+  open.forEach(t => closeTab(t.uid, true));
+  logRule('Deleted — '+LIST_NOUN[hit.list].toLowerCase()+' and its tab',
+    '“'+hit.item.label+'” is gone from the rail, and its tab closed with it: a tab cannot outlive its destination. This is the only gesture that removes a saved item — closing its tab never does.', 'block');
+  syncRail(); render();
+}
+
+/* The account menu. Log out has to live somewhere a user can find without being told, and the
+   avatar is where every product puts it — so the avatar stops being a shortcut to Settings and
+   becomes the menu it looks like. Sign-in and sign-out ceremonies are CAIT-577's; what this
+   owns is the way IN to them. */
+function openAcctMenu(anchor){
+  closeMenus();
+  const m = document.createElement('div');
+  m.className = 'ovf-menu acct-menu';
+  const r = anchor.getBoundingClientRect();
+  m.style.left = Math.round(r.left)+'px';
+  m.style.top  = 'auto';
+  m.style.bottom = Math.round(window.innerHeight - r.top + 8)+'px';
+  /* Identity, then the one thing that has nowhere else to live. Settings is a rail row two
+     lines above this menu — offering it here as well meant two doors to one page, and the
+     question "why two settings?" is the cost of that. */
+  /* The org is named here for one reason: this is the only place in the shell that answers
+     "who am I signed in as", and on a benefits product the answer has two halves — the person
+     and the employer whose programme they are in. It is a fact, not an action, so it reads as
+     one: a muted line under the identity, no icon, nothing to click. */
+  /* Employer FIRST, then the person. It is the read-back every multi-tenant SaaS uses —
+     Slack's workspace above the account, Google's organisation above the address — because
+     the question behind the click is "which account am I in", and the tenant is the half of
+     that answer a user cannot infer from their own name. */
+  m.innerHTML = '<div class="ovf-head">'
+      + '<div class="s org-line">'+esc(ORG)+'</div>'
+      + '<div class="t">'+esc(WHO.name)+'</div>'
+      + '<div class="s">'+esc(WHO.email)+'</div></div>'
+    + '<div class="ovf-list">'
+    + '<button class="ovf-item" data-acct="logout"><span class="ic">'+ico('logout',16)+'</span>'
+      + '<span class="t">Log out</span></button>'
+    + '</div>';
+  m.addEventListener('click', e => {
+    const b = e.target.closest('[data-acct]'); if(!b) return;
+    e.stopPropagation(); closeMenus();
+    /* Signing out returns the shell to a first session so a reviewer can see what it costs:
+       tabs gone, the strip back to one, everything saved still saved. */
+    S.shell = mkCtx(); S.shut = {}; S.showAll = {}; S.paOpen = false;
+    logRule('Signed out',
+      'The session ends: tabs and their order go, the strip returns to a single Home tab. Nothing the user saved is touched — signing out is not deleting. The sign-out ceremony itself belongs to CAIT-577; what this shell owns is the way into it.', 'ctx');
+    syncRail(); render();
+  });
+  document.body.appendChild(m);
+}
+
+function openRowMenu(anchor, id){
+  closeMenus();
+  const hit = savedOf(id); if(!hit) return;
+  const m = document.createElement('div');
+  m.className = 'ovf-menu';
+  const r = anchor.getBoundingClientRect();
+  m.style.left = Math.round(r.left - 6)+'px';
+  m.style.top  = Math.round(r.bottom + 6)+'px';
+  m.innerHTML = '<div class="ovf-head"><div class="t">'+esc(hit.item.label)+'</div>'
+    + '<div class="s">'+LIST_NOUN[hit.list]+' · saved in the rail</div></div>'
+    + '<div class="ovf-list">'
+    + '<button class="ovf-item" data-row="rename"><span class="ic">'+ico('pencil',16)+'</span><span class="t">Rename</span></button>'
+    + '<button class="ovf-item" data-row="up"><span class="ic">'+ico('up',16)+'</span><span class="t">Move up</span>'
+      + (hit.i === 0 ? '<span class="s">top</span>' : '')+'</button>'
+    + '<button class="ovf-item" data-row="down"><span class="ic">'+ico('chevDown',16)+'</span><span class="t">Move down</span>'
+      + (hit.i === hit.arr.length-1 ? '<span class="s">bottom</span>' : '')+'</button>'
+    + '<button class="ovf-item" data-row="delete"><span class="ic" style="color:var(--danger-fg)">'+ico('trash',16)+'</span>'
+      + '<span class="t" style="color:var(--danger-fg)">Delete</span></button>'
+    + '</div>';
+  m.addEventListener('click', e => {
+    const b = e.target.closest('[data-row]'); if(!b) return;
+    e.stopPropagation(); closeMenus();
+    const act = b.dataset.row;
+    if(act === 'rename'){
+      S.renaming = id; render();
+      const el = document.querySelector('[data-rename="'+id+'"]');
+      if(el){ el.focus(); el.select(); }
+    }
+    else if(act === 'up')     moveSaved(id, -1);
+    else if(act === 'down')   moveSaved(id, +1);
+    else if(act === 'delete') deleteSaved(id);
+  });
+  document.body.appendChild(m);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   ROLE — the three navigation results the ticket asks to see
+   ═══════════════════════════════════════════════════════════════ */
+function setRole(v){
+  if(S.role === v) return;
+  S.role = v;
+  document.body.dataset.role = v;
+  /* Tabs can outlive a role change in review, but a tab whose destination just left the
+     sidebar cannot: it would be reachable with no rail item to match it. */
+  const gone = [];
+  const live = new Set();
+  navFor().groups.forEach(g => g.items.forEach(i => live.add(i.id)));
+  navFor().primary.forEach(i => live.add(i.id));
+  navFor().footer.forEach(i => live.add(i.id));
+  C().tabs.filter(t => t.state !== 'fixed' && t.navId && !live.has(t.navId) && t.navId !== 'ask')
+    .forEach(t => { gone.push(t.label); closeTab(t.uid, true); });
+
+  logRule(
+    v === 'employee' ? 'Employee only' : v === 'both' ? 'Employee + employer admin' : 'Employer admin only',
+    (v === 'employee'
+      ? 'One employee-facing widget entry under Spaces / Tools. No employer section anywhere — not disabled, not greyed.'
+      : v === 'both'
+        ? 'A second Spaces group appears for the company, carrying the employer-admin destination. Same sidebar, same tab strip: employer access is additive, never a mode the user switches into.'
+        : 'No personal side at all — Memory and Connected accounts are absent rather than empty, and every dashboard is a company dashboard, so the employer section is the work area.')
+    + (gone.length ? ' Closed with their destinations: “'+gone.join('”, “')+'”.' : ''), 'ctx');
+  syncSegs(); syncRail(); render();
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   DEMO CONTROLS
+   ═══════════════════════════════════════════════════════════════ */
+function syncSegs(){
+  const set = (id, v) => document.querySelectorAll('#'+id+' button').forEach(b =>
+    b.setAttribute('aria-pressed', b.dataset.v === v ? 'true' : 'false'));
+  set('segRole', S.role);
+  set('segContent', S.content); set('segCohort', S.hasLegacy ? 'yes' : 'no');
+}
+document.getElementById('segRole').addEventListener('click', e => {
+  const b = e.target.closest('[data-v]'); if(b) setRole(b.dataset.v); });
+
+document.getElementById('segContent').addEventListener('click', e => {
+  const b = e.target.closest('[data-v]'); if(!b || b.dataset.v === S.content) return;
+  S.content = b.dataset.v;
+  S.saved = seedSaved(S.content === 'returning');
+  S.shell = mkCtx();   /* saved items differ, so the strip restarts */
+  S.embedNavUser = null;
+  logRule(S.content === 'first' ? 'First-time user' : 'Returning user',
+    S.content === 'first'
+      ? 'Nothing user-created exists yet, so Dashboards and Conversations show their empty state rather than disappearing — the header is where creation lives, so hiding it would hide the way to start. Spaces are unaffected: they are provided, not created, which is the whole point of them.'
+      : 'Three saved conversations, the same Spaces, and one active item consistent across the rail, the strip and the canvas.', 'auto');
+  syncSegs(); syncRail(); render();
+});
+document.getElementById('segCohort').addEventListener('click', e => {
+  const b = e.target.closest('[data-v]');
+  if(!b || b.dataset.v === (S.hasLegacy ? 'yes' : 'no')) return;
+  S.hasLegacy = b.dataset.v === 'yes';
+  if(!S.hasLegacy){
+    /* A tab cannot outlive its destination. */
+    const killed = [];
+    C().tabs.filter(t => t.kind === 'tools').forEach(t => { killed.push(t.label); closeTab(t.uid, true); });
+    S.embedNavUser = null;
+    logRule('No legacy elements in the program',
+      'The program design carries no legacy elements, so there is no legacy touchpoint to link to. With the widget being the only provided destination that exists today, the grouping empties and is omitted entirely — not rendered empty, not disabled — and the Home launcher goes with it. This is NOT platform_access: a cait_only org that bought Candidly Core or SLEC sits on the other side of this toggle. A future Cait-native provided Space would bring the grouping back without bringing the widget back.'
+      + (killed.length ? ' Open widget tab'+(killed.length>1?'s':'')+' closed: “'+killed.join('”, “')+'”.' : ''), 'block');
+  }else{
+    logRule('Legacy elements in the program — Spaces restored',
+      'The program design includes legacy elements — Candidly Core, SLEC or another premium legacy product — so the touchpoint exists and Spaces comes back with its one entry. Entitlements resolve separately and are out of scope here.', 'auto');
+  }
+  syncSegs(); syncRail(); render();
+});
+document.getElementById('btnRestore').addEventListener('click', () => {
+  const c = C();
+  c.tabs = c.tabs.filter(t => t.state !== 'transient');
+  c.tabs.forEach(t => { t.hidden = false; if(t.kind === 'tools') t.loaded = false; });
+  const home = c.tabs.find(t => t.navId === 'home');
+  c.activeUid = home ? home.uid : (c.tabs[0] && c.tabs[0].uid);
+  S.toolsState = 'ready';
+  logRule('Signed back in', 'Kept tabs and their order came back. The transient tab did not — it was never worth persisting. The Tools tab restored lazily: present in the strip, embedded content not loaded until focused.', 'auto');
+  syncSegs(); syncRail(); render();
+});
+document.getElementById('btnReset').addEventListener('click', () => {
+  S.shell = mkCtx();
+  S.saved = seedSaved(S.content === 'returning');
+  S.toolsState='ready'; S.userCollapsed=false; S.embedNavUser=null;
+  S.shut={}; S.showAll={}; S.renaming=null;   /* group collapse is a session preference too */
+  S.sinceDismissed=false;
+  logRule('Session reset', 'Back to the two fixed tabs — Home and Ask Cait.', 'ctx');
+  syncSegs(); syncRail(); render();
+});
+document.getElementById('btnClearLog').addEventListener('click', () => { S.log = []; renderLog(); });
+document.getElementById('demoClose').addEventListener('click', () => { document.body.dataset.demo='0'; setTimeout(render,0); });
+document.getElementById('demoOpen').addEventListener('click', () => { document.body.dataset.demo='1'; setTimeout(render,0); });
+document.getElementById('paSlot').addEventListener('click', e => {
+  if(e.target.closest('[data-pa-toggle]')){
+    S.paOpen = !S.paOpen; renderPA();
+    logRule(S.paOpen ? 'Assistant opened' : 'Assistant collapsed',
+      S.paOpen
+        ? 'Cait is reachable from every surface, so the floater carries the same starting prompts the marketing pages use. It is hidden on a chat surface, where the composer is already the way in.'
+        : 'Back to the mark with its presence dot.');
+    return;
+  }
+  const q = e.target.closest('[data-pa]');
+  if(q){
+    S.paOpen = false;
+    openNav('new-chat', {});
+    logRule('Started from the assistant', '“'+q.dataset.pa+'” opened Ask Cait. The floater is an entry point to the one conversation surface, never a second chat.');
+  }
+});
+/* Anchored to the RIGHT of the control, vertically centred, flipping left only if the window
+   cannot take it. Hidden on click as well as on leave, so it never lingers over a menu it
+   just opened. */
+const TIP = document.getElementById('tipLayer');
+/* BELOW the control by default, ABOVE when the window has no room underneath — the standard
+   pair, and the one people expect from a hover hint. Side placement was tried first and did
+   not read: at the sidebar's edge it pointed away from the control it described, and inside
+   the panel it was clipped. It stays in the fixed layer, so nothing can clip it now, and it
+   is centred on the control rather than on the row, which is what makes it obvious which
+   control is being explained. */
+const TIP_GAP = 8;
+function showTip(el){
+  const text = el.dataset.tip; if(!text) return;
+  TIP.textContent = text;
+  TIP.dataset.on = '1'; TIP.setAttribute('aria-hidden','false');
+  const r = el.getBoundingClientRect(), t = TIP.getBoundingClientRect();
+
+  /* In the rail, beside the icon — the convention every icon rail uses, and the only
+     placement that does not cover the next icon in a 40px-pitch list. It is available now
+     only because the layer is position:fixed; anchored inside the sidebar it was clipped at
+     the 52px edge, which is what the old .tip span got wrong. */
+  const sb = el.closest('.sidebar');
+  /* Beside the sidebar for any ROW — collapsed or not. A row tooltip placed below covers the
+     next row, which is the whole reason the native one was noise. The `+` and `⋯` controls
+     keep the below/above placement that was chosen for them; this is only rows. */
+  if(sb && (document.body.dataset.rail === '1' || el.classList.contains('nav'))){
+    let ry = r.top + r.height/2 - t.height/2;
+    ry = Math.max(8, Math.min(ry, window.innerHeight - t.height - 8));
+    TIP.dataset.place = 'right';
+    /* Measured from the RAIL's edge, not the icon's box. Every icon is inset inside the
+       52px rail by its own padding, so anchoring to the button left the tooltip a pixel off
+       the border on some rows and eight off on others — a ragged left edge down the column.
+       One x for the whole rail. */
+    TIP.style.left = Math.round(sb.getBoundingClientRect().right + TIP_GAP)+'px';
+    TIP.style.top  = Math.round(ry)+'px';
+    return;
+  }
+
+  let y = r.bottom + TIP_GAP, place = 'below';
+  if(y + t.height > window.innerHeight - 8){ y = r.top - TIP_GAP - t.height; place = 'above'; }
+  if(y < 8){ y = Math.min(r.bottom + TIP_GAP, window.innerHeight - t.height - 8); place = 'below'; }
+
+  /* Centred on the control, then clamped so it never leaves the window. */
+  let x = r.left + r.width/2 - t.width/2;
+  x = Math.max(8, Math.min(x, window.innerWidth - t.width - 8));
+
+  TIP.dataset.place = place;
+  TIP.style.left = Math.round(x)+'px';
+  TIP.style.top  = Math.round(y)+'px';
+}
+function hideTip(){ TIP.dataset.on = '0'; TIP.setAttribute('aria-hidden','true'); }
+document.addEventListener('pointerover', e => {
+  const el = e.target.closest && e.target.closest('[data-tip]');
+  if(el) showTip(el); else hideTip();
+});
+document.addEventListener('focusin', e => {
+  const el = e.target.closest && e.target.closest('[data-tip]');
+  if(el) showTip(el); else hideTip();
+});
+document.addEventListener('pointerdown', hideTip, true);
+
+/* Keyboard mode: set by any navigation key, cleared by the first pointer press. */
+document.addEventListener('keydown', e => {
+  if(['Tab','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Home','End',' ','Enter','Escape'].includes(e.key))
+    document.body.dataset.kb = '1';
+}, true);
+document.addEventListener('pointerdown', () => { delete document.body.dataset.kb; }, true);
+window.addEventListener('blur', hideTip);
+
+window.addEventListener('resize', () => { hideTip(); renderStrip(); });
+
+/* ── boot ─────────────────────────────────────────────────────── */
+syncSegs(); syncRail(); render();
+/* Research build: allow a link to open a specific destination, e.g. ?open=sp-debt for the
+   Student debt Space. The shell had no deep linking — it always booted on Home — so a link
+   from the workspace's sidebar landed on Home and the tester had to find the Space themselves.
+   Also accepts ?state=returning to boot the returning-user experience. */
+(function(){
+  try{
+    var q = new URLSearchParams(location.search);
+    if(q.get('state') === 'returning' && typeof S === 'object'){ S.content = 'returning'; syncSegs(); render(); }
+    var open = q.get('open');
+    if(open && typeof openNav === 'function' && typeof navItem === 'function' && navItem(open)) openNav(open);
+  }catch(e){}
+})();
+logRule('Ready', 'One tab, on Home. Selecting anything in the sidebar navigates this tab; ⌘/Ctrl-click opens a second one. That is the whole rule.', 'ctx');
+</script>
+</body>
+</html>
